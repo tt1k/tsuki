@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Sophisticated Mono Translator - Final</title>
+    <style>
+        :root {
+            --window-bg: rgba(18, 18, 18, 0.98);
+            --box-idle: rgba(45, 45, 45, 0.5);
+            --box-hover: rgba(60, 60, 60, 0.75);
+            --border-idle: rgba(255, 255, 255, 0.04);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            
+            /* 文字与图标颜色 */
+            --text-main: #E5E5E5; 
+            --text-dim: #777777; /* 设置图标使用的灰色 */
+            --main-font: "SF Mono", "Menlo", "Monaco", monospace;
+            --main-size: 14px;
+
+            /* 胶囊划线：80% 亮度, 5.5px 高, 4px 圆角 */
+            --h-yellow: rgba(204, 171, 8, 0.45);
+            --h-purple: rgba(153, 72, 194, 0.45); 
+            --h-green: rgba(40, 172, 60, 0.45);   
+            --h-blue: rgba(8, 105, 204, 0.45);    
+            --h-gray: rgba(110, 110, 115, 0.4);
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            font-family: var(--main-font);
+            -webkit-user-select: none;
+        }
+
+        .window {
+            width: 460px;
+            background: var(--window-bg);
+            backdrop-filter: blur(60px);
+            border-radius: 12px;
+            box-shadow: 0 40px 120px rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            gap: 8px;
+            border: 0.5px solid var(--border-idle);
+        }
+
+        .card-box {
+            position: relative;
+            background: var(--box-idle);
+            border-radius: 10px;
+            border: 0.5px solid var(--border-idle);
+            transition: all 0.25s ease;
+        }
+
+        .card-box:hover {
+            background: var(--box-hover);
+            border-color: var(--border-hover);
+        }
+
+        textarea {
+            width: 100%;
+            height: 90px;
+            background: transparent;
+            border: none;
+            padding: 16px 70px 16px 16px;
+            font-size: var(--main-size);
+            font-family: var(--main-font);
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            box-sizing: border-box;
+            color: var(--text-main);
+            caret-color: #FFFFFF;
+        }
+
+        .action-group {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 5px;
+            border: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            background: rgba(255,255,255,0.05);
+            color: var(--text-dim); /* 设置图标颜色 */
+        }
+
+        .icon-btn:hover { background: rgba(255,255,255,0.12); color: #EEE; }
+        .btn-translate { color: rgba(50, 215, 75, 0.6); }
+
+        .output-area {
+            min-height: 160px;
+            padding: 18px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px; 
+        }
+
+        /* 核心翻译行：汉字(亮) 读音(灰) */
+        .headword-row {
+            font-size: var(--main-size);
+            font-weight: 800; 
+            color: var(--text-main);
+            letter-spacing: 0.2px;
+        }
+
+        .headword-reading {
+            color: var(--text-dim); /* 读音部分设为灰色 */
+            margin-left: 8px;
+        }
+
+        .flow-container {
+            display: flex;
+            flex-wrap: wrap;
+            row-gap: 12px; 
+            column-gap: 5px; 
+            align-items: flex-end;
+        }
+
+        .word-box {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            padding: 0 4px; 
+        }
+
+        .furigana {
+            font-size: 8.5px;
+            color: #666;
+            height: 10px;
+            margin-bottom: 2px;
+            font-family: var(--main-font);
+        }
+
+        .kanji {
+            font-size: var(--main-size);
+            font-family: var(--main-font);
+            color: var(--text-main);
+            line-height: 1;
+            z-index: 2;
+        }
+
+        .word-box::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 0;
+            right: 0;
+            height: 5.5px;
+            z-index: 1;
+            border-radius: 4px;
+            mix-blend-mode: plus-lighter;
+        }
+
+        .c-yellow::after { background-color: var(--h-yellow); }
+        .c-purple::after { background-color: var(--h-purple); }
+        .c-green::after  { background-color: var(--h-green); }
+        .c-blue::after   { background-color: var(--h-blue); }
+        .c-gray::after   { background-color: var(--h-gray); }
+
+        svg { width: 14px; height: 14px; fill: currentColor; }
+    </style>
+</head>
+<body>
+
+    <div class="window">
+        <div class="card-box">
+            <div class="action-group">
+                <button class="icon-btn btn-translate" onclick="doTranslate()">
+                    <svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
+                </button>
+                <!-- 设置图标使用的灰色 -->
+                <button class="icon-btn"><svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.81,11.69,4.81,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></button>
+            </div>
+            <textarea id="input" spellcheck="false" autofocus></textarea>
+        </div>
+        
+        <div class="card-box">
+            <div class="output-area">
+                <div class="headword-row" id="headword">
+                    結構<span class="headword-reading">けっこう</span>
+                </div>
+                <div class="flow-container" id="results"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const exampleData = [
+            { k: "はい", f: "", c: "c-gray" },
+            { k: "そう", f: "", c: "c-purple" },
+            { k: "で", f: "", c: "c-gray" },
+            { k: "最近", f: "さいきん", c: "c-yellow" },
+            { k: "私", f: "わたし", c: "c-blue" },
+            { k: "も", f: "", c: "c-green" },
+            { k: "ね", f: "", c: "c-gray" },
+            { k: "その", f: "", c: "c-green" },
+            { k: "一人", f: "ひとり", c: "c-yellow" },
+            { k: "の", f: "", c: "c-blue" },
+            { k: "时间", f: "じかん", c: "c-yellow" },
+            { k: "を", f: "", c: "c-green" },
+            { k: "楽しむ", f: "たのしむ", c: "c-green" },
+            { k: "ために", f: "", c: "c-yellow" },
+            { k: "結構", f: "けっこう", c: "c-purple" }
+        ];
+
+        function doTranslate() {
+            const container = document.getElementById('results');
+            container.innerHTML = '';
+            document.getElementById('headword').style.opacity = '1';
+            exampleData.forEach(item => {
+                const div = document.createElement('div');
+                div.className = `word-box ${item.c}`;
+                div.innerHTML = `<div class="furigana">${item.f}</div><div class="kanji">${item.k}</div>`;
+                container.appendChild(div);
+            });
+        }
+        document.getElementById('headword').style.opacity = '0';
+    </script>
+</body>
+</html>

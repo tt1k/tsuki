@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# SwiftPM / Swift build artifacts
+.build/
+Packages/
+Package.resolved
+
+# Xcode
+DerivedData/
+*.xcworkspace/
+xcuserdata/
+*.xcuserstate
+
+# Logs
+*.log
+
+# VSCode
+*.vscode
