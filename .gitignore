@@ -8,12 +8,14 @@ Package.resolved
 
 # Xcode
 DerivedData/
+dist/
 *.xcworkspace/
 xcuserdata/
 *.xcuserstate
 
 # Logs
 *.log
+logs/
 
 # VSCode
 *.vscode

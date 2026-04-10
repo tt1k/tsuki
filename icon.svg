@@ -1,0 +1,69 @@
+<svg height="512" viewBox="0 0 24 24" width="512" xmlns="http://www.w3.org/2000/svg" style="flex: 0 0 auto; line-height: 1;">
+  <title>Tsuki Icon Optimized for macOS Dock Radius</title>
+  <rect x="0" y="0" width="24" height="24" rx="5.4" fill="url(#geminicli-gray-darker-fill)"/>
+  <rect x="0" y="0" width="24" height="24" rx="5.4" fill="url(#outer-highlight-top-left)" opacity="0.46"/>
+  <rect x="0" y="0" width="24" height="24" rx="5.4" fill="url(#outer-highlight-bottom-right)" opacity="0.42"/>
+  <rect x="0" y="0" width="24" height="24" rx="5.4" fill="url(#outer-side-falloff)" opacity="0.16"/>
+  <rect x="1.05" y="1.05" width="21.9" height="21.9" rx="4.35" fill="#141920"/>
+  <rect x="1.05" y="1.05" width="21.9" height="21.9" rx="4.35" fill="url(#primary-light-direction-gradient)" opacity="0.34"/>
+  <rect x="1.05" y="1.05" width="21.9" height="21.9" rx="4.35" fill="url(#dark-overlay-top-right)"/>
+  <rect x="1.05" y="1.05" width="21.9" height="21.9" rx="4.35" fill="url(#dark-overlay-bottom-left)"/>
+  <g transform="translate(12 12) scale(0.8) translate(-12 -12)">
+    <path d="M15 4.7a7.9 7.9 0 1 0 0 14.6a5.1 5.1 0 1 1 0-14.6z" fill="url(#moon-fill)" transform="rotate(-50 12 12)"/>
+  </g>
+  <path d="M16.8 5.5l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5.5-1.2z" fill="url(#star-fill)"/>
+  <path d="M4.9 5.0l.32.72.72.32-.72.32-.32.72-.32-.72-.72-.32.72-.32.32-.72z" fill="url(#star-fill)" opacity="0.92"/>
+  <path d="M19.0 18.2l.28.66.66.28-.66.28-.28.66-.28-.66-.66-.28.66-.28.28-.66z" fill="url(#star-fill)" opacity="0.88"/>
+  <path d="M5.0 18.0l.27.62.62.27-.62.27-.27.62-.27-.62-.62-.27.62-.27.27-.62z" fill="url(#star-fill)" opacity="0.82"/>
+  <circle cx="12.8" cy="11.7" r=".18" fill="#A7B1BE" opacity="0.55"/>
+  <circle cx="12.1" cy="3.9" r=".16" fill="#A7B1BE" opacity="0.45"/>
+  <circle cx="19.4" cy="10.2" r=".18" fill="#A7B1BE" opacity="0.5"/>
+  <circle cx="20" cy="14.9" r=".15" fill="#A7B1BE" opacity="0.42"/>
+  <circle cx="3.8" cy="12.7" r=".17" fill="#A7B1BE" opacity="0.48"/>
+  <circle cx="8.2" cy="19.1" r=".16" fill="#A7B1BE" opacity="0.44"/>
+  <defs>
+    <linearGradient gradientUnits="userSpaceOnUse" id="geminicli-gray-darker-fill" x1="0" x2="24" y1="0" y2="24">
+      <stop offset="0" stop-color="#4B5564"/>
+      <stop offset=".48" stop-color="#2A323D"/>
+      <stop offset="1" stop-color="#1A212A"/>
+    </linearGradient>
+    <radialGradient gradientUnits="userSpaceOnUse" id="outer-highlight-top-left" cx="1.6" cy="1.6" r="16.6">
+      <stop offset="0" stop-color="#E2E8F2" stop-opacity="0.88"/>
+      <stop offset="0.7" stop-color="#A3AFBF" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#A3AFBF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient gradientUnits="userSpaceOnUse" id="outer-highlight-bottom-right" cx="22.4" cy="22.4" r="16.6">
+      <stop offset="0" stop-color="#CDD6E4" stop-opacity="0.76"/>
+      <stop offset="0.72" stop-color="#8F9BAD" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#8F9BAD" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient gradientUnits="userSpaceOnUse" id="outer-side-falloff" x1="0" x2="24" y1="12" y2="12">
+      <stop offset="0" stop-color="#0D131C" stop-opacity="0.36"/>
+      <stop offset="0.34" stop-color="#0D131C" stop-opacity="0.1"/>
+      <stop offset="0.5" stop-color="#0D131C" stop-opacity="0"/>
+      <stop offset="0.66" stop-color="#0D131C" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#0D131C" stop-opacity="0.36"/>
+    </linearGradient>
+    <linearGradient gradientUnits="userSpaceOnUse" id="primary-light-direction-gradient" x1="1.05" x2="22.95" y1="1.05" y2="22.95">
+      <stop offset="0" stop-color="#C4CEDD"/>
+      <stop offset=".5" stop-color="#576274"/>
+      <stop offset="1" stop-color="#111722"/>
+    </linearGradient>
+    <radialGradient gradientUnits="userSpaceOnUse" id="dark-overlay-top-right" cx="20.4" cy="3.6" r="10.2">
+      <stop offset="0" stop-color="#04070D" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#04070D" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient gradientUnits="userSpaceOnUse" id="dark-overlay-bottom-left" cx="3.6" cy="20.4" r="10.2">
+      <stop offset="0" stop-color="#04070D" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#04070D" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="moon-fill" x1="8.2" y1="7" x2="16.8" y2="17.8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ADB6C2"/>
+      <stop offset="1" stop-color="#737F90"/>
+    </linearGradient>
+    <linearGradient id="star-fill" x1="5.8" y1="5.4" x2="18.8" y2="17.6" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9EA9B7"/>
+      <stop offset="1" stop-color="#667385"/>
+    </linearGradient>
+  </defs>
+</svg>

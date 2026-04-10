@@ -1,0 +1,319 @@
+import Foundation
+import SQLite3
+
+actor SQLiteTranslationCacheStore: TranslationCacheStore {
+    struct CachedRecord {
+        let queryText: String
+        let queryTextNormalized: String
+        let sourceLang: String
+        let targetLang: String
+        let result: TranslationResult
+        let updatedAt: Date
+    }
+
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+    private let databaseURL: URL
+    private var db: OpaquePointer?
+
+    nonisolated var databasePath: String {
+        databaseURL.path
+    }
+
+    init(fileManager: FileManager = .default) {
+        self.databaseURL = Self.makeDatabaseURL(fileManager: fileManager)
+        do {
+            try fileManager.createDirectory(
+                at: self.databaseURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+
+            var handle: OpaquePointer?
+            let openResult = sqlite3_open_v2(
+                self.databaseURL.path,
+                &handle,
+                SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
+                nil
+            )
+
+            guard openResult == SQLITE_OK, let handle else {
+                let message = handle.flatMap { sqlite3_errmsg($0) }.flatMap { String(cString: $0) } ?? "unknown"
+                if let handle {
+                    sqlite3_close(handle)
+                }
+                AppEventLogger.log("CACHE_DB_OPEN_FAIL \(message)")
+                return
+            }
+
+            try Self.executeSchemaStatements(db: handle)
+            db = handle
+            AppEventLogger.log("CACHE_DB_READY \(self.databaseURL.path)")
+        } catch {
+            AppEventLogger.log("CACHE_DB_INIT_FAIL \(error.localizedDescription)")
+            if let db {
+                sqlite3_close(db)
+            }
+        }
+    }
+
+    deinit {
+        if let db {
+            sqlite3_close(db)
+        }
+    }
+
+    func load(for request: TranslationRequest) async -> TranslationResult? {
+        guard let db else { return nil }
+
+        let sql = """
+        SELECT result_json
+        FROM translation_cache
+        WHERE query_text_norm = ? AND source_lang = ? AND target_lang = ?
+        LIMIT 1;
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            logSQLiteError(prefix: "CACHE_DB_PREPARE_LOAD_FAIL", db: db)
+            return nil
+        }
+        defer { sqlite3_finalize(statement) }
+
+        bindText(request.normalizedSourceText, to: 1, in: statement)
+        bindText(request.sourceLang, to: 2, in: statement)
+        bindText(request.targetLang, to: 3, in: statement)
+
+        let step = sqlite3_step(statement)
+        guard step == SQLITE_ROW else {
+            if step != SQLITE_DONE {
+                logSQLiteError(prefix: "CACHE_DB_STEP_LOAD_FAIL", db: db)
+            }
+            return nil
+        }
+
+        guard let jsonCString = sqlite3_column_text(statement, 0) else { return nil }
+        let jsonText = String(cString: jsonCString)
+        guard let data = jsonText.data(using: .utf8) else { return nil }
+
+        do {
+            return try decoder.decode(TranslationResult.self, from: data)
+        } catch {
+            AppEventLogger.log("CACHE_DB_DECODE_FAIL \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    func save(_ result: TranslationResult, for request: TranslationRequest) async {
+        guard let db else { return }
+
+        let sql = """
+        INSERT INTO translation_cache (
+            query_text,
+            query_text_norm,
+            source_lang,
+            target_lang,
+            result_json,
+            updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(query_text_norm, source_lang, target_lang)
+        DO UPDATE SET
+            query_text = excluded.query_text,
+            result_json = excluded.result_json,
+            updated_at = excluded.updated_at;
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            logSQLiteError(prefix: "CACHE_DB_PREPARE_SAVE_FAIL", db: db)
+            return
+        }
+        defer { sqlite3_finalize(statement) }
+
+        let jsonData: Data
+        do {
+            jsonData = try encoder.encode(result)
+        } catch {
+            AppEventLogger.log("CACHE_DB_ENCODE_FAIL \(error.localizedDescription)")
+            return
+        }
+
+        let jsonText = String(decoding: jsonData, as: UTF8.self)
+        bindText(request.sourceText, to: 1, in: statement)
+        bindText(request.normalizedSourceText, to: 2, in: statement)
+        bindText(request.sourceLang, to: 3, in: statement)
+        bindText(request.targetLang, to: 4, in: statement)
+        bindText(jsonText, to: 5, in: statement)
+        sqlite3_bind_double(statement, 6, Date().timeIntervalSince1970)
+
+        let step = sqlite3_step(statement)
+        guard step == SQLITE_DONE else {
+            logSQLiteError(prefix: "CACHE_DB_SAVE_FAIL", db: db)
+            return
+        }
+    }
+
+    func cachedEntryCount() async -> Int {
+        guard let db else { return 0 }
+        let sql = "SELECT COUNT(*) FROM translation_cache;"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            logSQLiteError(prefix: "CACHE_DB_PREPARE_COUNT_FAIL", db: db)
+            return 0
+        }
+        defer { sqlite3_finalize(statement) }
+
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            logSQLiteError(prefix: "CACHE_DB_STEP_COUNT_FAIL", db: db)
+            return 0
+        }
+
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
+    func loadAllRecords() async -> [CachedRecord] {
+        guard let db else { return [] }
+
+        let sql = """
+        SELECT query_text, query_text_norm, source_lang, target_lang, result_json, updated_at
+        FROM translation_cache
+        ORDER BY updated_at DESC;
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            logSQLiteError(prefix: "CACHE_DB_PREPARE_LIST_FAIL", db: db)
+            return []
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var records: [CachedRecord] = []
+
+        while true {
+            let step = sqlite3_step(statement)
+            if step == SQLITE_DONE {
+                break
+            }
+
+            guard step == SQLITE_ROW else {
+                logSQLiteError(prefix: "CACHE_DB_STEP_LIST_FAIL", db: db)
+                break
+            }
+
+            guard
+                let queryTextRaw = sqlite3_column_text(statement, 0),
+                let queryTextNormRaw = sqlite3_column_text(statement, 1),
+                let sourceLangRaw = sqlite3_column_text(statement, 2),
+                let targetLangRaw = sqlite3_column_text(statement, 3),
+                let resultJSONRaw = sqlite3_column_text(statement, 4)
+            else {
+                continue
+            }
+
+            let queryText = String(cString: queryTextRaw)
+            let queryTextNorm = String(cString: queryTextNormRaw)
+            let sourceLang = String(cString: sourceLangRaw)
+            let targetLang = String(cString: targetLangRaw)
+            let resultJSON = String(cString: resultJSONRaw)
+            let updatedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 5))
+
+            guard let data = resultJSON.data(using: .utf8) else {
+                continue
+            }
+
+            do {
+                let result = try decoder.decode(TranslationResult.self, from: data)
+                records.append(
+                    CachedRecord(
+                        queryText: queryText,
+                        queryTextNormalized: queryTextNorm,
+                        sourceLang: sourceLang,
+                        targetLang: targetLang,
+                        result: result,
+                        updatedAt: updatedAt
+                    )
+                )
+            } catch {
+                AppEventLogger.log("CACHE_DB_DECODE_LIST_FAIL \(error.localizedDescription)")
+            }
+        }
+
+        return records
+    }
+
+    func clearAllRecords() async -> Int {
+        guard let db else { return 0 }
+
+        let sql = "DELETE FROM translation_cache;"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            logSQLiteError(prefix: "CACHE_DB_PREPARE_CLEAR_FAIL", db: db)
+            return 0
+        }
+        defer { sqlite3_finalize(statement) }
+
+        let step = sqlite3_step(statement)
+        guard step == SQLITE_DONE else {
+            logSQLiteError(prefix: "CACHE_DB_CLEAR_FAIL", db: db)
+            return 0
+        }
+
+        return Int(sqlite3_changes64(db))
+    }
+
+    private static func executeSchemaStatements(db: OpaquePointer) throws {
+        let createTableSQL = """
+        CREATE TABLE IF NOT EXISTS translation_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query_text TEXT NOT NULL,
+            query_text_norm TEXT NOT NULL,
+            source_lang TEXT NOT NULL,
+            target_lang TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        """
+
+        let createIndexSQL = """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_cache_lookup
+        ON translation_cache(query_text_norm, source_lang, target_lang);
+        """
+
+        try Self.execute(sql: createTableSQL, db: db)
+        try Self.execute(sql: createIndexSQL, db: db)
+    }
+
+    private static func execute(sql: String, db: OpaquePointer) throws {
+        let result = sqlite3_exec(db, sql, nil, nil, nil)
+        guard result == SQLITE_OK else {
+            let message = sqlite3_errmsg(db).map { String(cString: $0) } ?? "unknown"
+            throw NSError(domain: "SQLiteTranslationCacheStore", code: Int(result), userInfo: [NSLocalizedDescriptionKey: message])
+        }
+    }
+
+    private func bindText(_ value: String, to index: Int32, in statement: OpaquePointer) {
+        sqlite3_bind_text(statement, index, value, -1, Self.sqliteTransient)
+    }
+
+    private func logSQLiteError(prefix: String, db: OpaquePointer) {
+        let message = sqlite3_errmsg(db).map { String(cString: $0) } ?? "unknown"
+        AppEventLogger.log("\(prefix) \(message)")
+    }
+
+    private static var sqliteTransient: sqlite3_destructor_type {
+        unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    }
+
+    private static func makeDatabaseURL(fileManager: FileManager) -> URL {
+        if let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            return applicationSupport
+                .appendingPathComponent("tsuki", isDirectory: true)
+                .appendingPathComponent("translation-cache.sqlite3", isDirectory: false)
+        }
+
+        return fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("tsuki", isDirectory: true)
+            .appendingPathComponent("translation-cache.sqlite3", isDirectory: false)
+    }
+}

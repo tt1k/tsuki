@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tsuki "text to translate"
+  echo "text to translate" | tsuki
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ $# -gt 0 ]]; then
+  text="$*"
+elif [[ ! -t 0 ]]; then
+  text="$(cat)"
+else
+  usage
+  exit 1
+fi
+
+text="${text%$'\n'}"
+
+if [[ -z "${text//[[:space:]]/}" ]]; then
+  echo "Error: input text is empty" >&2
+  exit 1
+fi
+
+encoded_text="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$text")"
+open "tsuki://translate?text=${encoded_text}"

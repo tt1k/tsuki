@@ -1,251 +1,166 @@
-# macOS 极简日语翻译助手 技术架构文档
+# Tsuki macOS 架构文档
 
-## 1. 文档目的与范围
-本文档用于指导“macOS 极简日语翻译助手”的工程实现，覆盖：
-- 桌面端应用架构（SwiftUI + AppKit）
-- 翻译流程与分词标注流程
-- UI 渲染与设计 token 落地
-- 配置、可观测性、测试与发布策略
+## 1. 文档目的
+本文档描述 Tsuki 当前前端（macOS）技术架构，重点覆盖：
+- 分层与依赖方向
+- 翻译请求编排与 token 补齐
+- 窗口/快捷键/URL Scheme 交互链路
+- 配置、日志、截图与笔记产物
 
-设计依据：
-- `design/DESIGN.md`
-- `design/design.html`
-
----
-
-## 2. 产品目标与非目标
-
-### 2.1 目标
-- 提供极速唤起、输入即译的日语翻译助手体验。
-- 严格还原极简黑客风 UI（颜色、字号、间距、窗口行为）。
-- 支持“词形 + 读音 + 例句分词高亮”结果展示。
-- 具备可扩展的翻译 Provider 架构（可替换后端服务）。
-
-### 2.2 非目标（当前阶段）
-- 不实现复杂历史管理、多窗口、多标签。
-- 不做跨平台（优先 macOS 原生）。
-- 不支持离线大模型推理（优先在线 API）。
+参考文档：
+- `docs/architecture/IMPLEMENTATION.md`
+- `docs/design/DESIGN.md`
 
 ---
 
-## 3. 架构总览
+## 2. 架构总览（分层）
 
-采用分层架构：
+1) Presentation（UI 层）
+- SwiftUI 页面：`InputCardView`、`OutputCardView`、`SettingsSheetView`
+- 视图编排：`MainWindowView`
+- 设计 token：`DesignTokens` + `DarkColorPalette` + `LightColorPalette`
 
-1) Presentation Layer（UI 层）
-- SwiftUI 视图：输入卡片、输出卡片、设置面板
-- 自定义 FlowLayout：例句流式词块布局
-- 设计 Token 系统：统一颜色/字号/间距/圆角
+2) Application（用例层）
+- `TranslationUseCase`：请求编排入口
+- `TokenizeAndAnnotateUseCase`：词块标注与高亮色分配
 
-2) Application Layer（应用编排层）
-- TranslationUseCase：翻译流程编排
-- TokenizeAndAnnotateUseCase：分词 + 词性映射 + 高亮颜色策略
-- ShortcutHandler：ESC 隐藏、Cmd+Enter 翻译
+3) Domain（领域层）
+- 模型：`TranslationRequest`、`TranslationResult`、`WordToken`
+- 协议：`TranslatorProvider`
 
-3) Domain Layer（领域层）
-- 实体：TranslationRequest / TranslationResult / WordToken
-- 接口：TranslatorProvider、TokenizerProvider
+4) Infrastructure（基础设施）
+- 网络：`ProviderRouterTranslatorProvider`、`DeepSeekDictionaryProvider`
+- 日志：`AppEventLogger`
+- 笔记与截图：`TranslationNoteLogger`、`OutputCardScreenshotWriter`
+- 时间与命名：`LocalDateTime`、`NoteAssetNaming`
 
-4) Infrastructure Layer（基础设施层）
-- Provider 实现：HTTP 翻译服务适配器（OpenAI/DeepL/自定义）
-- NLP 实现：NaturalLanguage.NLTokenizer
-- Window 管理：NSPanel / AppKit bridge
-- 配置存储：UserDefaults / Keychain（密钥）
-
----
-
-## 4. 关键模块设计
-
-### 4.1 窗口与生命周期模块
-职责：
-- 启动即创建无标题工具窗口（460pt 固定宽，内容自适应高）
-- Dock 点击唤起并自动聚焦输入框
-- ESC 隐藏应用（不退出）
-
-实现建议：
-- AppKit `NSPanel` + SwiftUI hosting
-- 或 SwiftUI `.windowStyle(.hiddenTitleBar)` + 自定义行为桥接
-- 全局按键监听（仅窗口激活时）
-
-### 4.2 输入模块（Input Card）
-职责：
-- 接收文本输入、快捷键触发翻译
-- 右上角 Action Group：翻译按钮 + 设置按钮
-
-约束：
-- Monospace 14pt
-- 右侧保留 70pt 内边距，避免与按钮重叠
-- hover 背景 0.25s 过渡
-
-### 4.3 翻译编排模块
-流程：
-1. 读取输入文本
-2. 参数校验（空文本短路）
-3. 调用 TranslatorProvider
-4. 对返回结果执行分词与标注
-5. 更新 ViewModel 状态（主线程）
-6. 输出核心结果与例句词块
-
-失败策略：
-- 网络失败/超时：输出轻量错误提示
-- Provider 异常：可重试一次（指数退避）
-
-### 4.4 分词与高亮模块
-职责：
-- 对例句进行分词（NLTokenizer）
-- 输出 `WordToken[]`：`kanji`、`furigana`、`pos`、`colorClass`
-
-颜色策略（与设计稿一致）：
-- yellow / purple / green / blue / gray 五色轮替
-- 后续可按词性映射（名词=blue，动词=green 等）+ 兜底 gray
-
-### 4.5 输出模块（Output Card）
-结构：
-- Header Row：`汉字词形 + 空格 + 平假名读音`
-- Sentence Flow：可换行词块，上假名下主体 + 胶囊下划线
-
-渲染约束：
-- 行间距 12pt，词间距 5pt
-- 假名 8.5pt，主体 14pt
-- 胶囊高度 5.5pt，圆角 4pt，blend mode `plus-lighter/screen`
-
-### 4.6 设置模块
-职责：
-- 管理 Provider 类型、API Key、请求超时、快捷键偏好
-- 持久化本地配置（Keychain + UserDefaults）
+依赖方向：
+- `View -> ViewModel -> UseCase -> Protocol -> Infrastructure`
+- 依赖在 `TsukiApp` 入口处完成组装，UI 不直接依赖具体 provider。
 
 ---
 
-## 5. 数据模型（建议）
+## 3. 应用入口与窗口模型
 
-```swift
-struct TranslationRequest {
-    let sourceText: String
-    let sourceLang: String   // e.g. "zh"
-    let targetLang: String   // e.g. "ja"
-}
-
-struct TranslationResult {
-    let headwordKanji: String
-    let headwordKana: String
-    let sentence: String
-    let tokens: [WordToken]
-}
-
-struct WordToken: Identifiable {
-    let id: UUID
-    let kanji: String
-    let furigana: String
-    let partOfSpeech: String?
-    let highlight: HighlightColor
-}
-
-enum HighlightColor: String {
-    case yellow, purple, green, blue, gray
-}
-```
+- 入口：`App/TsukiApp.swift`，使用 `@NSApplicationDelegateAdaptor` 挂接 `AppDelegate`。
+- 窗口：`WindowGroup + .hiddenTitleBar + .windowResizability(.contentSize)`。
+- 固定尺寸：`460 x 236`（由 `DesignTokens.Size` 定义）。
+- 标题栏按钮隐藏、窗口位置默认置于状态栏下方右侧。
+- 支持 Dock 图标显隐切换（`dockIconVisible`）。
+- `ESC` 触发 `onExitCommand` 后隐藏 app（不退出）。
 
 ---
 
-## 6. 状态管理与并发模型
+## 4. 输入与触发链路
 
-ViewModel 状态机：
-- idle
-- typing
-- translating
-- success(result)
-- failure(message)
+输入规则：
+- 单行输入（换行会被替换为空格）。
+- 最大长度 25 字；超过长度可继续编辑，但翻译请求会被拦截。
 
-并发建议：
-- 使用 Swift Concurrency（`async/await`）
-- 翻译任务可取消（用户继续输入时取消上次任务）
-- UI 更新统一在主线程 `@MainActor`
+触发入口：
+- 点击翻译按钮。
+- `Enter` 或 `Cmd+Enter`（本地 key monitor，且对输入法 composition 做保护）。
+- URL Scheme：`tsuki://translate?text=...`。
 
----
-
-## 7. UI 设计 Token 落地
-
-建议建立 `DesignTokens.swift`：
-
-- 颜色：
-  - textMain `#E5E5E5`
-  - textDim `#777777`
-  - windowBg `#141414 @0.98`
-  - boxIdle `rgba(45,45,45,0.5)`
-  - boxHover `rgba(60,60,60,0.75)`
-- 尺寸：
-  - windowWidth 460
-  - outerPadding 8
-  - cardRadius 10
-  - windowRadius 12
-  - cardGap 8
-- 字体：
-  - mono 14pt
-  - furigana 8.5pt
-- 动效：
-  - hoverTransition 0.25s ease
+状态一致性：
+- 同一通知 `TsukiTriggerTranslate` 驱动按钮与快捷键触发。
+- `isTranslating` 驱动 loading 与请求中状态。
 
 ---
 
-## 8. 外部依赖与接口边界
+## 5. 翻译与标注流程
 
-外部依赖：
-- Apple NaturalLanguage（分词）
-- 网络层（URLSession）
-- 可选第三方翻译 API
+主流程：
+1. `MainViewModel.translate()` 校验空输入、长度、并发状态。
+2. 读取 `SettingsStore`（provider、language、apiKey）。
+3. 调用 `TranslationUseCase.execute()`。
+4. `ProviderRouterTranslatorProvider` 路由到具体 provider（当前仅 `deepseek`）。
+5. `DeepSeekDictionaryProvider` 请求 `chat/completions` 并解析 JSON。
+6. provider 侧先做“漏 token 本地补齐（不含标点）”。
+7. `TokenizeAndAnnotateUseCase` 分配高亮色并返回 `TranslationResult`。
+8. ViewModel 更新为 `success`/`failure`，并记录日志与笔记。
 
-接口边界：
-- `TranslatorProvider`：统一翻译入口，屏蔽具体供应商差异
-- `TokenizerProvider`：支持未来替换自定义分词器
-
----
-
-## 9. 安全与隐私
-
-- API Key 必须存储在 Keychain，不写入明文配置文件
-- 日志默认不记录用户原文全文（只记录长度、耗时、错误码）
-- 网络请求启用 TLS，设置合理 timeout（建议 10s）
+错误映射：
+- 缺失 API Key、HTTP 错误、响应格式异常、未接入 provider，均映射为本地化 UI 文案。
 
 ---
 
-## 10. 测试策略
+## 6. 数据模型
 
-单元测试：
-- TranslationUseCase 成功/失败/取消场景
-- 颜色映射与 token 生成逻辑
-
-UI 测试：
-- ESC 隐藏行为
-- Cmd+Enter 触发
-- 输入输出卡片 hover 状态变化
-- 关键尺寸与排版回归快照
-
-集成测试：
-- Provider mock 与真实沙箱 API 联调
+核心模型定义在 `Domain/Models/TranslationModels.swift`：
+- `TranslationRequest`：`sourceText/provider/apiKey/sourceLang/targetLang`
+- `TranslationResult`：`headwordKanji/headwordKana/meaning/sentence/tokens`
+- `WordToken`：`kanji/furigana/partOfSpeech/highlight`
+- `ProviderTranslationPayload`：provider 原始结构到领域结构的桥接对象
 
 ---
 
-## 11. 发布与演进路线
+## 7. 状态与并发模型
 
-M1（MVP）：
-- 固定 Provider + 输入翻译 + 输出展示 + 快捷键
-
-M2：
-- 设置页（Provider/API Key/超时）
-- 错误提示与重试
-- 词性映射优化
-
-M3：
-- 多 Provider 路由
-- 历史记录（可选）
-- 术语表与自定义词典（可选）
+- 视图状态：`idle | typing | success | failure`。
+- 并行状态：`isTranslating`（按钮 loading 与任务互斥）。
+- 并发机制：Swift Concurrency（`Task` + `async/await`）。
+- 输入变化时会取消上一轮请求，防止过期结果回写。
+- UI 状态更新统一在 `@MainActor`。
 
 ---
 
-## 12. 验收标准（DoD）
+## 8. 配置与持久化
 
-- UI 与设计稿视觉偏差可控（颜色、字号、间距符合规范）
-- 窗口行为满足：Dock 唤起聚焦、ESC 隐藏
-- 平均翻译响应可用（网络正常时）
-- 例句分词可换行展示且高亮正确
-- 核心流程具备单测覆盖与基础 UI 自动化验证
+配置文件：`~/.config/tsuki/config.json`
+
+当前持久化字段：
+- `provider`
+- `language`
+- `appearanceMode`
+- `screenshotAppearanceMode`
+- `shortcutEnabled`（字段保留）
+- `dockIconVisible`
+- `forceTopRightOnLaunch`
+- `apiKeys`（按 provider）
+
+归一化策略：
+- 不在支持集的 provider/language 会回落到默认值。
+- API key 按 provider 独立存储。
+
+---
+
+## 9. 可观测性与产物
+
+运行日志：
+- 目录：`~/Library/Logs/tsuki`
+- 文件：`tsuki-app-<run-id>.log`
+- 内容：设置变更、快捷键事件、`AI_REQ`/`AI_RES` 紧凑 JSON
+
+翻译笔记：
+- 目录：`~/Library/Logs/tsuki/note/<yyyy-MM-dd>/`
+- 文件：`NOTE-day.md`、`NOTE-night.md`
+- 每次成功翻译会追加：词条标题 + 输出卡片截图引用
+- 截图文件位于 `screenshot/<headword>-day.png`、`screenshot/<headword>-night.png`
+
+---
+
+## 10. 主题与设计 Token
+
+- Token 入口：`Presentation/Design/DesignTokens.swift`
+- 支持 `dark/light/auto` 三种应用主题
+- 翻译完成后会自动保存 `day` 与 `night` 两份截图
+- 关键尺寸：`windowWidth=460`、`windowHeight=236`、`outputMinHeight=160`
+- 高亮色：`yellow/purple/green/blue/gray`
+
+---
+
+## 11. 安全边界与已知限制
+
+- API key 当前仍保存在本地配置文件，尚未迁移 Keychain。
+- provider 路由已预留多模型，但网络层当前仅接入 DeepSeek。
+- `shortcutEnabled` 已持久化，当前版本未接入实际快捷键开关逻辑。
+
+---
+
+## 12. 演进建议
+
+1. 接通 `openai/gemini/...` provider 并补齐错误映射。
+2. API key 迁移至 Keychain，配置文件仅保留非敏感字段。
+3. 为 token 补齐与输入长度限制补回归测试。
+4. 将 `shortcutEnabled` 接入真正的快捷键启停逻辑。
