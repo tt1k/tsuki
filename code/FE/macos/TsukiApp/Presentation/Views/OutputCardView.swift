@@ -4,7 +4,20 @@ struct OutputCardView: View {
     let result: TranslationResult?
     let outputTitle: String?
     let outputMessage: String?
+    let cardCornerRadius: CGFloat
     @State private var isHovered = false
+
+    init(
+        result: TranslationResult?,
+        outputTitle: String?,
+        outputMessage: String?,
+        cardCornerRadius: CGFloat = DesignTokens.Size.cardRadius
+    ) {
+        self.result = result
+        self.outputTitle = outputTitle
+        self.outputMessage = outputMessage
+        self.cardCornerRadius = cardCornerRadius
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Size.rowGap) {
@@ -27,10 +40,10 @@ struct OutputCardView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 18)
         .background {
-            RoundedRectangle(cornerRadius: DesignTokens.Size.cardRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                 .fill(isHovered ? DesignTokens.ColorToken.boxHover : DesignTokens.ColorToken.boxIdle)
                 .overlay {
-                    RoundedRectangle(cornerRadius: DesignTokens.Size.cardRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                         .stroke(isHovered ? DesignTokens.ColorToken.borderHover : DesignTokens.ColorToken.borderIdle, lineWidth: DesignTokens.Size.cardBorder)
                 }
         }

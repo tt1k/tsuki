@@ -34,7 +34,7 @@
 - `Domain/Protocols/Providers.swift`：`TranslatorProvider` 协议。
 
 5) Infrastructure 层
-- 网络：`Infrastructure/Network/ProviderRouterTranslatorProvider.swift`、`Infrastructure/Network/DeepSeekDictionaryProvider.swift`
+- 网络：`Infrastructure/Network/TranslateRouterProvider.swift`、`Infrastructure/Network/Impl/DeepSeekDictionaryProvider.swift`
 - 日志：`Infrastructure/Logging/AppEventLogger.swift`
 - 翻译笔记：`Infrastructure/Logging/TranslationNoteLogger.swift`
 - 输出截图：`Infrastructure/Logging/OutputCardScreenshotWriter.swift`
@@ -47,7 +47,7 @@
 当前运行链路：
 - `MainViewModel`
   - `TranslationUseCase`
-    - `ProviderRouterTranslatorProvider`
+      - `TranslateRouterProvider`
       - `DeepSeekDictionaryProvider`
     - `TokenizeAndAnnotateUseCase`
 
@@ -57,7 +57,7 @@
 1. 用户触发来源：按钮 / `Enter` / `Cmd+Enter` / `tsuki://translate?text=...`。
 2. `MainViewModel.translate()` 校验空输入、25 字上限、并发状态。
 3. 读取 `SettingsStore` 当前 provider/language/apiKey。
-4. 路由到 provider（目前仅 deepseek）。
+4. 路由到 provider（`deepseek/openai/gemini/qwen/kimi`）。
 5. provider 解析结果并补齐缺失 token（过滤标点）。
 6. 标注用例映射 `WordToken` 与高亮色。
 7. 成功后写入展示状态，并触发：
@@ -91,7 +91,7 @@
   - `apiKeys`
 
 ### 5.2 支持集
-- provider：`deepseek/openai/gemini/anthropic/xai/qwen/kimi`
+- provider：`deepseek/openai/gemini/qwen/kimi`
 - language：`zh-CN/zh-TW/en/ja/ko/es/fr/de/ru`
 
 ### 5.3 API Key 交互
@@ -135,7 +135,7 @@
 
 ## 9. 已知边界
 
-- 多 provider 仅配置与路由预留，实际仅 deepseek 已接通。
+- 当前已接入 provider：`deepseek/openai/gemini/qwen/kimi`。
 - API key 仍在本地配置明文保存，未迁移 Keychain。
 - `shortcutEnabled` 已持久化，当前未接入触发判断。
 - `code/be` 仍为预留目录。

@@ -103,7 +103,7 @@ final class SettingsStore: ObservableObject {
     }
 
     private let supportedProviders: Set<String> = [
-        "deepseek", "openai", "gemini", "anthropic", "xai", "qwen", "kimi"
+        "deepseek", "openai", "gemini", "qwen", "kimi"
     ]
     private let supportedLanguages: Set<String> = [
         "zh-CN", "zh-TW", "en", "ja", "ko", "es", "fr", "de", "ru"

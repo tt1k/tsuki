@@ -1,6 +1,6 @@
 import Foundation
 
-struct DeepSeekDictionaryProvider: TranslatorProvider {
+struct CompletionsDictionaryHelper: TranslatorProvider {
     private struct ChatRequest: Encodable {
         struct Message: Encodable {
             let role: String
@@ -50,29 +50,36 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
     }
 
     enum ProviderError: LocalizedError {
-        case missingAPIKey
-        case invalidResponse
-        case httpError(Int, String)
+        case missingAPIKey(String)
+        case invalidResponse(String)
+        case httpError(String, Int, String)
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey:
-                return "Missing DeepSeek API key in Settings"
-            case .invalidResponse:
-                return "Unable to parse DeepSeek response"
-            case let .httpError(code, detail):
-                return "DeepSeek API request failed: HTTP \(code) - \(detail)"
+            case let .missingAPIKey(providerName):
+                return "Missing \(providerName) API key in Settings"
+            case let .invalidResponse(providerName):
+                return "Unable to parse \(providerName) response"
+            case let .httpError(providerName, code, detail):
+                return "\(providerName) API request failed: HTTP \(code) - \(detail)"
             }
         }
     }
 
-    private let apiURL = URL(string: "https://api.deepseek.com/chat/completions")!
-    private let model = "deepseek-chat"
+    private let providerName: String
+    private let apiURL: URL
+    private let model: String
+
+    init(providerName: String, apiURL: URL, model: String) {
+        self.providerName = providerName
+        self.apiURL = apiURL
+        self.model = model
+    }
 
     func translate(_ request: TranslationRequest) async throws -> ProviderTranslationPayload {
         let apiKey = request.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
-            throw ProviderError.missingAPIKey
+            throw ProviderError.missingAPIKey(providerName)
         }
 
         var urlRequest = URLRequest(url: apiURL)
@@ -104,16 +111,16 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
             "AI_RES \(compactJSON(["provider": request.provider, "endpoint": "chat.completions", "status": statusCode, "response": utf8String(from: data)]))"
         )
 
-        if !(200...299).contains(statusCode) {
+        if !(200 ... 299).contains(statusCode) {
             let detail = String(data: data, encoding: .utf8) ?? ""
-            throw ProviderError.httpError(statusCode, detail)
+            throw ProviderError.httpError(providerName, statusCode, detail)
         }
 
         let content = try extractContent(from: data)
         let parsed = try decodeWordInfo(from: content)
 
         guard !parsed.tokens.isEmpty else {
-            throw ProviderError.invalidResponse
+            throw ProviderError.invalidResponse(providerName)
         }
 
         let rawTokens = parsed.tokens.map { token in
@@ -138,8 +145,8 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
         for token in tokens {
             guard !token.kanji.isEmpty else { continue }
 
-            if let range = sentence.range(of: token.kanji, range: cursor..<sentence.endIndex) {
-                let gap = String(sentence[cursor..<range.lowerBound])
+            if let range = sentence.range(of: token.kanji, range: cursor ..< sentence.endIndex) {
+                let gap = String(sentence[cursor ..< range.lowerBound])
                 supplemented.append(contentsOf: splitSegments(from: gap))
                 supplemented.append(token)
                 cursor = range.upperBound
@@ -148,7 +155,7 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
             }
         }
 
-        let tail = String(sentence[cursor..<sentence.endIndex])
+        let tail = String(sentence[cursor ..< sentence.endIndex])
         supplemented.append(contentsOf: splitSegments(from: tail))
 
         let filtered = supplemented.filter { !isPunctuationOnly($0.kanji) }
@@ -195,7 +202,7 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
     private func extractContent(from data: Data) throws -> String {
         let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
         guard let content = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines), !content.isEmpty else {
-            throw ProviderError.invalidResponse
+            throw ProviderError.invalidResponse(providerName)
         }
         return content
     }
@@ -203,7 +210,7 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
     private func decodeWordInfo(from rawContent: String) throws -> WordInfo {
         let jsonText = stripCodeFence(rawContent)
         guard let jsonData = jsonText.data(using: .utf8) else {
-            throw ProviderError.invalidResponse
+            throw ProviderError.invalidResponse(providerName)
         }
 
         do {

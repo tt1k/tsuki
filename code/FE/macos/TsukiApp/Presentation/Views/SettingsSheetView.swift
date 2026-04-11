@@ -23,8 +23,6 @@ private enum ProviderOption: String, CaseIterable {
     case deepseek
     case openai
     case gemini
-    case anthropic
-    case xai
     case qwen
     case kimi
 }
@@ -66,7 +64,6 @@ struct SettingsSheetView: View {
     @State private var databaseEntryCount = 0
     @State private var isExportingDatabase = false
     @State private var isClearingDatabase = false
-    @State private var databaseStatusMessage: String?
     @State private var hoveredTab: SettingsTab?
     @State private var isAPIKeyButtonHovered = false
     @State private var isNotePathButtonHovered = false
@@ -91,6 +88,12 @@ struct SettingsSheetView: View {
         }
         .frame(width: 700, height: 500)
         .background(DesignTokens.ColorToken.windowBG)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isEditingAPIKey {
+                endAPIKeyEditing()
+            }
+        }
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             refreshAPIKeyInput()
@@ -142,6 +145,11 @@ struct SettingsSheetView: View {
             }
             if selectedTab == .database {
                 refreshDatabaseInfo()
+            }
+        }
+        .onChange(of: apiKeyEditorFocused) { isFocused in
+            if !isFocused {
+                endAPIKeyEditing()
             }
         }
         .onDisappear {
@@ -364,6 +372,11 @@ struct SettingsSheetView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .simultaneousGesture(
+                                TapGesture(count: 2).onEnded {
+                                    beginAPIKeyEditing()
+                                }
+                            )
                             .onHover { isHovered in
                                 isAPIKeyButtonHovered = isHovered
                             }
@@ -522,15 +535,6 @@ struct SettingsSheetView: View {
                     .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
                 }
 
-                if let databaseStatusMessage {
-                    HStack {
-                        Spacer()
-                        Text(databaseStatusMessage)
-                            .font(.system(size: 11, weight: .regular, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-                            .frame(width: 260, alignment: .trailing)
-                    }
-                }
             }
         case .shortcuts:
             VStack(spacing: 10) {
@@ -645,9 +649,9 @@ struct SettingsSheetView: View {
         panel.prompt = localizedText(en: "Export", zhCN: "导出", zhTW: "匯出", ja: "書き出す")
         panel.message = localizedText(
             en: "Choose a folder to save NOTE-day.md, NOTE-night.md and screenshots.",
-            zhCN: "选择导出目录，将生成 NOTE-day.md、NOTE-night.md 和截图。",
-            zhTW: "選擇匯出資料夾，將產生 NOTE-day.md、NOTE-night.md 與截圖。",
-            ja: "NOTE-day.md、NOTE-night.md とスクリーンショットの保存先フォルダを選択してください。"
+            zhCN: "选择导出目录，将生成 NOTE-day.md、NOTE-night.md 和截图",
+            zhTW: "選擇匯出資料夾，將產生 NOTE-day.md、NOTE-night.md 與截圖",
+            ja: "NOTE-day.md、NOTE-night.md とスクリーンショットの保存先フォルダを選択してください"
         )
 
         guard panel.runModal() == .OK, let destination = panel.url else {
@@ -658,7 +662,6 @@ struct SettingsSheetView: View {
         AppEventLogger.log("Database export destination selected: \(destination.path)")
 
         isExportingDatabase = true
-        databaseStatusMessage = nil
 
         Task {
             let records = await cacheStore.loadAllRecords()
@@ -670,12 +673,23 @@ struct SettingsSheetView: View {
 
                 await MainActor.run {
                     isExportingDatabase = false
-                    databaseStatusMessage = localizedText(
-                        en: "Exported: \(exportedDirectory.lastPathComponent)",
-                        zhCN: "已导出：\(exportedDirectory.lastPathComponent)",
-                        zhTW: "已匯出：\(exportedDirectory.lastPathComponent)",
-                        ja: "書き出し完了：\(exportedDirectory.lastPathComponent)"
+
+                    let doneAlert = NSAlert()
+                    doneAlert.alertStyle = .informational
+                    doneAlert.messageText = localizedText(
+                        en: "Export completed",
+                        zhCN: "导出完成",
+                        zhTW: "匯出完成",
+                        ja: "書き出し完了"
                     )
+                    doneAlert.informativeText = localizedText(
+                        en: "Saved to \(exportedDirectory.lastPathComponent)",
+                        zhCN: "已保存到 \(exportedDirectory.lastPathComponent)",
+                        zhTW: "已儲存到 \(exportedDirectory.lastPathComponent)",
+                        ja: "\(exportedDirectory.lastPathComponent) に保存しました"
+                    )
+                    doneAlert.addButton(withTitle: localizedText(en: "OK", zhCN: "确定", zhTW: "確定", ja: "OK"))
+                    doneAlert.runModal()
                 }
 
                 NSWorkspace.shared.open(exportedDirectory)
@@ -683,12 +697,18 @@ struct SettingsSheetView: View {
             } catch {
                 await MainActor.run {
                     isExportingDatabase = false
-                    databaseStatusMessage = localizedText(
+
+                    let failedAlert = NSAlert()
+                    failedAlert.alertStyle = .warning
+                    failedAlert.messageText = localizedText(
                         en: "Export failed",
                         zhCN: "导出失败",
                         zhTW: "匯出失敗",
                         ja: "書き出し失敗"
                     )
+                    failedAlert.informativeText = error.localizedDescription
+                    failedAlert.addButton(withTitle: localizedText(en: "OK", zhCN: "确定", zhTW: "確定", ja: "OK"))
+                    failedAlert.runModal()
                 }
                 AppEventLogger.log("Cache export failed: \(error.localizedDescription)")
             }
@@ -722,14 +742,12 @@ struct SettingsSheetView: View {
         }
 
         isClearingDatabase = true
-        databaseStatusMessage = nil
 
         Task {
             let removed = await cacheStore.clearAllRecords()
             await MainActor.run {
                 isClearingDatabase = false
                 databaseEntryCount = 0
-                databaseStatusMessage = nil
 
                 let doneAlert = NSAlert()
                 doneAlert.alertStyle = .informational
@@ -741,9 +759,9 @@ struct SettingsSheetView: View {
                 )
                 doneAlert.informativeText = localizedText(
                     en: "Removed \(removed) cached entries.",
-                    zhCN: "已删除 \(removed) 条缓存记录。",
-                    zhTW: "已刪除 \(removed) 筆快取記錄。",
-                    ja: "\(removed) 件のキャッシュを削除しました。"
+                    zhCN: "已删除 \(removed) 条缓存记录",
+                    zhTW: "已刪除 \(removed) 筆快取記錄",
+                    ja: "\(removed) 件のキャッシュを削除しました"
                 )
                 doneAlert.addButton(withTitle: localizedText(en: "OK", zhCN: "确定", zhTW: "確定", ja: "OK"))
                 doneAlert.runModal()
@@ -760,6 +778,7 @@ struct SettingsSheetView: View {
     }
 
     private func beginAPIKeyEditing() {
+        guard !isEditingAPIKey else { return }
         isEditingAPIKey = true
         apiKeyInput = settingsStore.apiKey(for: settingsStore.provider)
         AppEventLogger.log("Settings editing API key for provider=\(settingsStore.provider)")

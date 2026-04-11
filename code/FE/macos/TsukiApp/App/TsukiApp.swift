@@ -12,7 +12,7 @@ struct TsukiApp: App {
         let settingsStore = SettingsStore()
         let viewModel = MainViewModel(
             translationUseCase: TranslationUseCase(
-                translatorProvider: ProviderRouterTranslatorProvider(),
+                translatorProvider: TranslateRouterProvider(),
                 tokenizeAndAnnotateUseCase: TokenizeAndAnnotateUseCase(),
                 translationCacheStore: SQLiteTranslationCacheStore()
             ),

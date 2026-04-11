@@ -27,7 +27,7 @@
 - 后端自定义命令：`./tsuki.sh be <command...>`
 
 ## 4) 当前阶段边界
-- 当前已接入在线翻译（DeepSeek）；其余 provider 仍为预留。
+- 当前已接入在线翻译：`deepseek/openai/gemini/qwen/kimi`。
 - `example.json` 仅作为视觉与结构对照，不再代表运行时唯一数据源。
 - API Key 当前仍写入 `~/.config/tsuki/config.json`（未迁移 Keychain）。
 - `shortcutEnabled` 已持久化但尚未接入快捷键开关逻辑。

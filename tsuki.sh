@@ -10,7 +10,7 @@ BE_DIR="$ROOT_DIR/code/be"
 TSUKI_DEFAULT_VERSION="0.0.1"
 TSUKI_DEFAULT_BUILD="0008"
 TSUKI_DEFAULT_VERSION_DEV="0.0.1-dev"
-TSUKI_DEFAULT_BUILD_DEV="0008.1"
+TSUKI_DEFAULT_BUILD_DEV="0008"
 
 if [[ -t 1 ]]; then
   UI_RESET=$'\033[0m'
@@ -237,7 +237,7 @@ update_dev_defaults_after_package() {
   local packaged_build="$2"
   local script_path="$ROOT_DIR/tsuki.sh"
   local dev_version="${packaged_version}-dev"
-  local dev_build="${packaged_build}.1"
+  local dev_build="${packaged_build}"
 
   python3 - "$script_path" "$dev_version" "$dev_build" <<'PY'
 import pathlib

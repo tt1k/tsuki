@@ -84,11 +84,14 @@ enum TranslationCacheNoteExporter {
     private static func renderOutputCardImage(result: TranslationResult, colorScheme: ColorScheme) -> NSImage? {
         let renderWidth = DesignTokens.Size.windowWidth - (DesignTokens.Size.outerPadding * 2)
         let renderHeight = DesignTokens.Size.outputMinHeight
-        let cornerRadius = DesignTokens.Size.cardRadius
 
-        let cardView = OutputCardView(result: result, outputTitle: nil, outputMessage: nil)
+        let cardView = OutputCardView(
+            result: result,
+            outputTitle: nil,
+            outputMessage: nil,
+            cardCornerRadius: 0
+        )
             .frame(width: renderWidth, height: renderHeight, alignment: .topLeading)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
         let snapshotView = ZStack {
             Rectangle()

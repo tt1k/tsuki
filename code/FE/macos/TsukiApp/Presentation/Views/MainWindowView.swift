@@ -66,22 +66,19 @@ struct MainWindowView: View {
     private func saveOutputCardScreenshot(result: TranslationResult) {
         let renderWidth = DesignTokens.Size.windowWidth - (DesignTokens.Size.outerPadding * 2)
         let renderHeight = DesignTokens.Size.outputMinHeight
-        let cornerRadius = DesignTokens.Size.cardRadius
 
         var images: [NoteTheme: NSImage] = [:]
         images[.day] = renderOutputCardImage(
             result: result,
             colorScheme: .light,
             renderWidth: renderWidth,
-            renderHeight: renderHeight,
-            cornerRadius: cornerRadius
+            renderHeight: renderHeight
         )
         images[.night] = renderOutputCardImage(
             result: result,
             colorScheme: .dark,
             renderWidth: renderWidth,
-            renderHeight: renderHeight,
-            cornerRadius: cornerRadius
+            renderHeight: renderHeight
         )
 
         let validImages = images.compactMapValues { $0 }
@@ -101,12 +98,15 @@ struct MainWindowView: View {
         result: TranslationResult,
         colorScheme: ColorScheme,
         renderWidth: CGFloat,
-        renderHeight: CGFloat,
-        cornerRadius: CGFloat
+        renderHeight: CGFloat
     ) -> NSImage? {
-        let cardView = OutputCardView(result: result, outputTitle: nil, outputMessage: nil)
+        let cardView = OutputCardView(
+            result: result,
+            outputTitle: nil,
+            outputMessage: nil,
+            cardCornerRadius: 0
+        )
             .frame(width: renderWidth, height: renderHeight, alignment: .topLeading)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
         let snapshotView = ZStack {
             Rectangle()

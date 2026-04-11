@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let commandOnly = flags == .command
 
             if event.keyCode == 36, (noModifiers || commandOnly) {
+                if !self.shouldTriggerTranslateShortcut() {
+                    return event
+                }
                 if self.isComposingTextInput() {
                     return event
                 }
@@ -49,33 +52,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return true
     }
 
-    func configureWindowIfNeeded(forceTopRightOnLaunch: Bool, appearanceMode: AppearanceMode) {
-        DispatchQueue.main.async {
-            guard let window = NSApp.windows.first else { return }
-            self.mainWindow = window
-            window.delegate = self
-            window.titleVisibility = .hidden
-            window.styleMask.insert(.fullSizeContentView)
-            window.titlebarAppearsTransparent = true
-            self.applyAppearanceMode(appearanceMode, to: window)
-            window.isOpaque = true
-            window.hasShadow = true
-            window.isMovableByWindowBackground = true
-            window.standardWindowButton(.closeButton)?.isHidden = true
-            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-            window.standardWindowButton(.zoomButton)?.isHidden = true
-            let fixedSize = NSSize(width: DesignTokens.Size.windowWidth, height: DesignTokens.Size.windowHeight)
-            window.minSize = fixedSize
-            window.maxSize = fixedSize
-            window.setContentSize(fixedSize)
-            self.deliverPendingURLTextIfNeeded()
+    func configureWindowIfNeeded(
+        forceTopRightOnLaunch: Bool,
+        appearanceMode: AppearanceMode,
+        retriesLeft: Int = 40
+    ) {
+        if let window = resolveMainWindow() {
+            configureMainWindow(
+                window,
+                forceTopRightOnLaunch: forceTopRightOnLaunch,
+                appearanceMode: appearanceMode
+            )
+            return
+        }
 
-            if forceTopRightOnLaunch {
-                self.showWindowAtTopRightWithoutFlash(window)
-            } else {
-                self.positionWindowUnderStatusItem(window)
-                self.showWindow(window, reposition: false)
-            }
+        guard retriesLeft > 0 else {
+            AppEventLogger.log("Main window not found during configureWindowIfNeeded")
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            self.configureWindowIfNeeded(
+                forceTopRightOnLaunch: forceTopRightOnLaunch,
+                appearanceMode: appearanceMode,
+                retriesLeft: retriesLeft - 1
+            )
         }
     }
 
@@ -134,6 +135,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func applyAppearanceMode(_ mode: AppearanceMode, to window: NSWindow) {
         window.appearance = mode.windowAppearance
         window.backgroundColor = DesignTokens.ColorToken.windowBGNS
+    }
+
+    private func resolveMainWindow() -> NSWindow? {
+        if let mainWindow {
+            return mainWindow
+        }
+
+        if let identifiedMainWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "main-window" }) {
+            return identifiedMainWindow
+        }
+
+        if let titledMainWindow = NSApp.windows.first(where: { $0.title == "Tsuki" }) {
+            return titledMainWindow
+        }
+
+        return NSApp.windows.first
+    }
+
+    private func configureMainWindow(
+        _ window: NSWindow,
+        forceTopRightOnLaunch: Bool,
+        appearanceMode: AppearanceMode
+    ) {
+        mainWindow = window
+        window.identifier = NSUserInterfaceItemIdentifier("main-window")
+        window.delegate = self
+        window.titleVisibility = .hidden
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        applyAppearanceMode(appearanceMode, to: window)
+        window.isOpaque = true
+        window.hasShadow = true
+        window.isMovableByWindowBackground = true
+        enforceHiddenWindowButtons(on: window)
+
+        let fixedSize = NSSize(width: DesignTokens.Size.windowWidth, height: DesignTokens.Size.windowHeight)
+        window.minSize = fixedSize
+        window.maxSize = fixedSize
+        window.setContentSize(fixedSize)
+        deliverPendingURLTextIfNeeded()
+
+        if forceTopRightOnLaunch {
+            showWindowAtTopRightWithoutFlash(window)
+        } else {
+            positionWindowUnderStatusItem(window)
+            showWindow(window, reposition: false)
+        }
+    }
+
+    private func enforceHiddenWindowButtons(on window: NSWindow) {
+        window.standardWindowButton(.closeButton)?.isHidden = true
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
     }
 
     private func configureStatusItem() {
@@ -199,15 +253,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func toggleMainWindowFromStatusItem() {
         guard let window = mainWindow ?? NSApp.windows.first else { return }
 
-        if window.isVisible, NSApp.isActive {
-            window.orderOut(nil)
+        if window.isVisible {
+            showWindow(window, reposition: false)
             return
         }
 
         showWindow(window, reposition: true)
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     private func showWindow(_ window: NSWindow, reposition: Bool) {
+        enforceHiddenWindowButtons(on: window)
         if reposition {
             positionWindowUnderStatusItem(window)
         }
@@ -220,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func showWindowAtTopRightWithoutFlash(_ window: NSWindow) {
+        enforceHiddenWindowButtons(on: window)
         window.alphaValue = 0
         window.orderOut(nil)
         positionWindowUnderStatusItem(window)
@@ -275,6 +335,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
 
+    private func shouldTriggerTranslateShortcut() -> Bool {
+        guard let keyWindow = NSApp.keyWindow else { return false }
+        guard let resolvedMainWindow = mainWindow ?? resolveMainWindow() else { return false }
+        return keyWindow == resolvedMainWindow
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
@@ -286,6 +352,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if window == settingsWindow {
             settingsWindow = nil
         }
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        guard window == mainWindow || window == settingsWindow else { return }
+        enforceHiddenWindowButtons(on: window)
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {

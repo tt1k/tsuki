@@ -115,9 +115,9 @@ final class MainViewModel: ObservableObject {
                 ),
                 message: localizedText(
                     en: "Input exceeds 25 characters. Please shorten it before translating.",
-                    zhCN: "输入超过 25 个字，请精简后再翻译。",
-                    zhTW: "輸入超過 25 個字，請精簡後再翻譯。",
-                    ja: "入力が25文字を超えています。短くしてから翻訳してください。"
+                    zhCN: "输入超过 25 个字，请精简后再翻译",
+                    zhTW: "輸入超過 25 個字，請精簡後再翻譯",
+                    ja: "入力が25文字を超えています；短くしてから翻訳してください"
                 )
             )
             applyFailure(failure)
@@ -165,9 +165,9 @@ final class MainViewModel: ObservableObject {
 
         let notice = localizedText(
             en: "Input exceeds 25 characters. You can keep editing, but translation requests will be blocked until shortened.",
-            zhCN: "输入超过 25 个字。你仍可继续编辑，但发起翻译时会被拦截，请先精简。",
-            zhTW: "輸入超過 25 個字。你仍可繼續編輯，但發起翻譯時會被攔截，請先精簡。",
-            ja: "入力が25文字を超えています。編集は続けられますが、翻訳リクエストは短くするまでブロックされます。"
+            zhCN: "输入超过 25 个字；你仍可继续编辑，但发起翻译时会被拦截，请先精简",
+            zhTW: "輸入超過 25 個字；你仍可繼續編輯，但發起翻譯時會被攔截，請先精簡",
+            ja: "入力が25文字を超えています；編集は続けられますが、翻訳リクエストは短くするまでブロックされます"
         )
 
         if inputLimitNoticeTitle != title {
@@ -199,16 +199,16 @@ final class MainViewModel: ObservableObject {
     }
 
     private func localizedFailureState(for error: Error) -> State {
-        if error is DeepSeekDictionaryProvider.ProviderError {
-            switch error as? DeepSeekDictionaryProvider.ProviderError {
-            case .missingAPIKey:
+        if error is CompletionsDictionaryHelper.ProviderError {
+            switch error as? CompletionsDictionaryHelper.ProviderError {
+            case let .missingAPIKey(providerName):
                 return localizedFailureState(
                     title: localizedText(en: "API Key Missing", zhCN: "缺少 API Key", zhTW: "缺少 API Key", ja: "APIキー未設定"),
                     message: localizedText(
-                        en: "Set an API key for the selected provider in Settings.",
-                        zhCN: "请在 Settings 中为当前模型配置 API Key。",
-                        zhTW: "請在 Settings 中為目前模型設定 API Key。",
-                        ja: "Settings で選択中のプロバイダーに API キーを設定してください。"
+                        en: "Set an API key for \(providerName) in Settings.",
+                        zhCN: "请在 Settings 中为 \(providerName) 配置 API Key",
+                        zhTW: "請在 Settings 中為 \(providerName) 設定 API Key",
+                        ja: "Settings で \(providerName) の API キーを設定してください"
                     )
                 )
             case .invalidResponse:
@@ -216,19 +216,19 @@ final class MainViewModel: ObservableObject {
                     title: localizedText(en: "Invalid Response", zhCN: "响应异常", zhTW: "回應異常", ja: "応答形式エラー"),
                     message: localizedText(
                         en: "The provider returned an invalid response format.",
-                        zhCN: "模型返回了无法解析的响应格式。",
-                        zhTW: "模型回傳了無法解析的回應格式。",
-                        ja: "プロバイダーの応答形式を解析できませんでした。"
+                        zhCN: "模型返回了无法解析的响应格式",
+                        zhTW: "模型回傳了無法解析的回應格式",
+                        ja: "プロバイダーの応答形式を解析できませんでした"
                     )
                 )
-            case let .httpError(code, _):
+            case let .httpError(providerName, code, _):
                 return localizedFailureState(
                     title: localizedText(en: "Request Failed", zhCN: "请求失败", zhTW: "請求失敗", ja: "リクエスト失敗"),
                     message: localizedText(
-                        en: "DeepSeek API request failed (HTTP \(code)).",
-                        zhCN: "DeepSeek 请求失败（HTTP \(code)）。",
-                        zhTW: "DeepSeek 請求失敗（HTTP \(code)）。",
-                        ja: "DeepSeek API リクエストに失敗しました（HTTP \(code)）。"
+                        en: "\(providerName) API request failed (HTTP \(code)).",
+                        zhCN: "\(providerName) 请求失败（HTTP \(code)）",
+                        zhTW: "\(providerName) 請求失敗（HTTP \(code)）",
+                        ja: "\(providerName) API リクエストに失敗しました（HTTP \(code)）"
                     )
                 )
             case nil:
@@ -236,16 +236,16 @@ final class MainViewModel: ObservableObject {
             }
         }
 
-        if let providerError = error as? ProviderRouterTranslatorProvider.ProviderError {
+        if let providerError = error as? TranslateRouterProvider.ProviderError {
             switch providerError {
             case let .unsupportedProvider(provider):
                 return localizedFailureState(
                     title: localizedText(en: "Provider Not Supported", zhCN: "模型暂不支持", zhTW: "模型暫不支援", ja: "プロバイダー未対応"),
                     message: localizedText(
                         en: "Provider '\(provider)' is not supported yet.",
-                        zhCN: "当前模型 '\(provider)' 暂未接入。",
-                        zhTW: "目前模型 '\(provider)' 尚未接入。",
-                        ja: "プロバイダー '\(provider)' はまだサポートされていません。"
+                        zhCN: "当前模型 '\(provider)' 暂未接入",
+                        zhTW: "目前模型 '\(provider)' 尚未接入",
+                        ja: "プロバイダー '\(provider)' はまだサポートされていません"
                     )
                 )
             }
@@ -257,7 +257,7 @@ final class MainViewModel: ObservableObject {
                 en: "Translation failed, please try again",
                 zhCN: "翻译失败，请稍后重试",
                 zhTW: "翻譯失敗，請稍後再試",
-                ja: "翻訳に失敗しました。しばらくしてから再試行してください"
+                ja: "翻訳に失敗しました；しばらくしてから再試行してください"
             )
         )
     }

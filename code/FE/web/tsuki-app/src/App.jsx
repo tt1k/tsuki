@@ -1,4 +1,57 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MdEntryPanel from "./MdEntryPanel";
+import MdViewerPage from "./MdViewerPage";
+import { getMdEntryCta, getMdEntryHeading, getMdEntrySub } from "./md-entry-copy";
+import SiteFooter from "./SiteFooter";
+import { collectFilesFromDataTransfer } from "./md-drop-utils";
+
+function hasMarkdownEntries(entries = []) {
+  return entries.some((item) => /\.md$/i.test(item.path || ""));
+}
+
+async function directoryContainsMarkdown(rootHandle) {
+  const stack = [rootHandle];
+
+  while (stack.length) {
+    const current = stack.pop();
+    for await (const entry of current.values()) {
+      if (entry.kind === "file" && /\.md$/i.test(entry.name)) {
+        return true;
+      }
+
+      if (entry.kind === "directory") {
+        stack.push(entry);
+      }
+    }
+  }
+
+  return false;
+}
+
+async function collectFilesFromDirectoryHandle(directoryHandle, parentPath = "") {
+  const entries = [];
+
+  for await (const entry of directoryHandle.values()) {
+    if (entry.kind === "file") {
+      const file = await entry.getFile();
+      entries.push({
+        path: `${parentPath}${entry.name}`,
+        file
+      });
+      continue;
+    }
+
+    if (entry.kind === "directory") {
+      const nestedEntries = await collectFilesFromDirectoryHandle(
+        entry,
+        `${parentPath}${entry.name}/`
+      );
+      entries.push(...nestedEntries);
+    }
+  }
+
+  return entries;
+}
 
 const LANGUAGES = [
   { code: "zh-CN", label: "中文" },
@@ -31,6 +84,18 @@ const PRODUCT_IMAGES = {
   ru: "/product_ru.png"
 };
 
+const MODAL_COPY = {
+  ja: { title: "お知らせ", ok: "了解です" },
+  "zh-CN": { title: "提示", ok: "确定" },
+  "zh-TW": { title: "提示", ok: "確定" },
+  en: { title: "Notice", ok: "OK" },
+  ko: { title: "안내", ok: "확인" },
+  es: { title: "Aviso", ok: "Aceptar" },
+  fr: { title: "Information", ok: "OK" },
+  de: { title: "Hinweis", ok: "OK" },
+  ru: { title: "Уведомление", ok: "ОК" }
+};
+
 const COPY = {
   ja: {
     heroTitleLine1: "翻訳はもっと速く",
@@ -60,7 +125,13 @@ const COPY = {
     lastCtaTitle: "すべての翻訳を、定着する学習へ",
     lastCtaDesc: "月の言葉で入力・理解・記憶の流れをつなげましょう",
     lastCtaBtn: "今すぐダウンロード",
-    statusReady: "Ready"
+    statusReady: "Ready",
+    mdEntryHeading: getMdEntryHeading("ja"),
+    mdEntryTitle: "フォルダをここにドロップ",
+    mdEntrySub: getMdEntrySub("ja"),
+    mdEntryCta: getMdEntryCta("ja"),
+    mdEntryNoMarkdown: "このフォルダには Markdown ファイルがありません",
+    mdEntryPermissionDenied: "フォルダへのアクセスが許可されませんでした"
   },
   "zh-CN": {
     heroTitleLine1: "翻译速度更快更准",
@@ -89,7 +160,13 @@ const COPY = {
     lastCtaTitle: "让每次翻译都更接近掌握",
     lastCtaDesc: "现在开始体验言叶之月，建立更顺滑的学习链路",
     lastCtaBtn: "立即下载",
-    statusReady: "就绪"
+    statusReady: "就绪",
+    mdEntryHeading: getMdEntryHeading("zh-CN"),
+    mdEntryTitle: "把文件夹拖到这里",
+    mdEntrySub: getMdEntrySub("zh-CN"),
+    mdEntryCta: getMdEntryCta("zh-CN"),
+    mdEntryNoMarkdown: "未检测到 Markdown",
+    mdEntryPermissionDenied: "权限未授予"
   },
   "zh-TW": {
     heroTitleLine1: "翻譯速度更快更準",
@@ -118,7 +195,13 @@ const COPY = {
     lastCtaTitle: "讓每次翻譯都更接近掌握",
     lastCtaDesc: "現在開始體驗言葉之月，建立更流暢的學習鏈路",
     lastCtaBtn: "立即下載",
-    statusReady: "就緒"
+    statusReady: "就緒",
+    mdEntryHeading: getMdEntryHeading("zh-TW"),
+    mdEntryTitle: "把資料夾拖到這裡",
+    mdEntrySub: getMdEntrySub("zh-TW"),
+    mdEntryCta: getMdEntryCta("zh-TW"),
+    mdEntryNoMarkdown: "該資料夾中沒有 Markdown 檔案",
+    mdEntryPermissionDenied: "未取得該資料夾的存取權限"
   },
   en: {
     heroTitleLine1: "Translate faster",
@@ -148,7 +231,13 @@ const COPY = {
     lastCtaTitle: "Turn every translation into learning",
     lastCtaDesc: "Start with Tsuki Translate and connect input, understanding, and memory",
     lastCtaBtn: "Download now",
-    statusReady: "Ready"
+    statusReady: "Ready",
+    mdEntryHeading: getMdEntryHeading("en"),
+    mdEntryTitle: "Drop a folder here",
+    mdEntrySub: getMdEntrySub("en"),
+    mdEntryCta: getMdEntryCta("en"),
+    mdEntryNoMarkdown: "No Markdown files found in this folder",
+    mdEntryPermissionDenied: "Folder access was not granted"
   },
   ko: {
     heroTitleLine1: "더 빠르게 번역하고",
@@ -177,7 +266,12 @@ const COPY = {
     lastCtaTitle: "모든 번역을 학습으로 연결하세요",
     lastCtaDesc: "月の言葉로 입력-이해-기억의 흐름을 만드세요",
     lastCtaBtn: "지금 다운로드",
-    statusReady: "준비됨"
+    statusReady: "준비됨",
+    mdEntryHeading: getMdEntryHeading("ko"),
+    mdEntryTitle: "폴더를 여기에 드롭하세요",
+    mdEntrySub: getMdEntrySub("ko"),
+    mdEntryCta: getMdEntryCta("ko"),
+    mdEntryNoMarkdown: "이 폴더에 Markdown 파일이 없습니다"
   },
   es: {
     heroTitleLine1: "Traduce mas rapido",
@@ -206,7 +300,12 @@ const COPY = {
     lastCtaTitle: "Convierte cada traduccion en aprendizaje",
     lastCtaDesc: "Empieza con 月の言葉 hoy",
     lastCtaBtn: "Descargar ahora",
-    statusReady: "Listo"
+    statusReady: "Listo",
+    mdEntryHeading: getMdEntryHeading("es"),
+    mdEntryTitle: "Suelta tu carpeta aqui",
+    mdEntrySub: getMdEntrySub("es"),
+    mdEntryCta: getMdEntryCta("es"),
+    mdEntryNoMarkdown: "No se encontraron archivos Markdown en esta carpeta"
   },
   fr: {
     heroTitleLine1: "Traduisez plus vite",
@@ -235,7 +334,12 @@ const COPY = {
     lastCtaTitle: "Transformez chaque traduction en apprentissage",
     lastCtaDesc: "Demarrez avec 月の言葉 des maintenant",
     lastCtaBtn: "Telecharger",
-    statusReady: "Pret"
+    statusReady: "Pret",
+    mdEntryHeading: getMdEntryHeading("fr"),
+    mdEntryTitle: "Deposez un dossier ici",
+    mdEntrySub: getMdEntrySub("fr"),
+    mdEntryCta: getMdEntryCta("fr"),
+    mdEntryNoMarkdown: "Aucun fichier Markdown trouve dans ce dossier"
   },
   de: {
     heroTitleLine1: "Schneller ubersetzen",
@@ -264,7 +368,12 @@ const COPY = {
     lastCtaTitle: "Mach aus jeder Ubersetzung Lernen",
     lastCtaDesc: "Starte jetzt mit 月の言葉",
     lastCtaBtn: "Jetzt herunterladen",
-    statusReady: "Bereit"
+    statusReady: "Bereit",
+    mdEntryHeading: getMdEntryHeading("de"),
+    mdEntryTitle: "Ordner hier ablegen",
+    mdEntrySub: getMdEntrySub("de"),
+    mdEntryCta: getMdEntryCta("de"),
+    mdEntryNoMarkdown: "In diesem Ordner wurden keine Markdown-Dateien gefunden"
   },
   ru: {
     heroTitleLine1: "Perevodite bystree",
@@ -293,11 +402,45 @@ const COPY = {
     lastCtaTitle: "Prevratite kazhdyi perevod v obuchenie",
     lastCtaDesc: "Nachnite s 月の言葉 uzhe seichas",
     lastCtaBtn: "Skachat",
-    statusReady: "Gotovo"
+    statusReady: "Gotovo",
+    mdEntryHeading: getMdEntryHeading("ru"),
+    mdEntryTitle: "Peretashchite papku siuda",
+    mdEntrySub: getMdEntrySub("ru"),
+    mdEntryCta: getMdEntryCta("ru"),
+    mdEntryNoMarkdown: "V etoi papke net failov Markdown"
   }
 };
 
 const RELEASE_URL = "https://github.com/tt1k/tsuki/releases";
+const LANGUAGE_COOKIE_KEY = "tsuki_lang";
+
+function readLanguageFromCookie() {
+  if (typeof document === "undefined") {
+    return "ja";
+  }
+
+  const cookies = document.cookie ? document.cookie.split(";") : [];
+  for (const cookieItem of cookies) {
+    const [rawKey, ...rawValueParts] = cookieItem.trim().split("=");
+    if (rawKey !== LANGUAGE_COOKIE_KEY) {
+      continue;
+    }
+
+    const value = decodeURIComponent(rawValueParts.join("="));
+    return value || "ja";
+  }
+
+  return "ja";
+}
+
+function persistLanguageToCookie(language) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const maxAge = 60 * 60 * 24 * 365;
+  document.cookie = `${LANGUAGE_COOKIE_KEY}=${encodeURIComponent(language)}; path=/; max-age=${maxAge}; samesite=lax`;
+}
 
 function AppleDownloadIcon() {
   return (
@@ -308,10 +451,145 @@ function AppleDownloadIcon() {
 }
 
 function App() {
-  const [language, setLanguage] = useState("ja");
+  const [pathname, setPathname] = useState(() =>
+    typeof window === "undefined" ? "/" : window.location.pathname
+  );
+  const folderInputRef = useRef(null);
+  const [mdInitialEntries, setMdInitialEntries] = useState([]);
+  const [mdEntryDragging, setMdEntryDragging] = useState(false);
+  const [noMarkdownModalOpen, setNoMarkdownModalOpen] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const onPopState = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, []);
+
+  const navigateToMd = useCallback((initialEntries = []) => {
+    if (typeof window !== "undefined" && window.location.pathname !== "/md") {
+      window.history.pushState(null, "", "/md");
+    }
+    setMdInitialEntries(initialEntries);
+    setPathname("/md");
+  }, []);
+
+  const [language, setLanguage] = useState(() => {
+    const savedLanguage = readLanguageFromCookie();
+    return LANGUAGES.some((item) => item.code === savedLanguage) ? savedLanguage : "ja";
+  });
+  const onLanguageChange = useCallback((nextLanguage) => {
+    setLanguage(nextLanguage);
+    persistLanguageToCookie(nextLanguage);
+  }, []);
   const t = useMemo(() => COPY[language] ?? COPY.ja, [language]);
+  const modalCopy = useMemo(() => MODAL_COPY[language] ?? MODAL_COPY.ja, [language]);
   const productName = useMemo(() => PRODUCT_NAMES[language] ?? PRODUCT_NAMES.ja, [language]);
   const productImage = useMemo(() => PRODUCT_IMAGES[language] ?? PRODUCT_IMAGES.ja, [language]);
+  const closeNoMarkdownModal = useCallback(() => {
+    setNoMarkdownModalOpen(false);
+    setModalMessage("");
+  }, []);
+  const openNoticeModal = useCallback((message) => {
+    setModalMessage(message);
+    setNoMarkdownModalOpen(true);
+  }, []);
+  const notifyNoMarkdown = useCallback(() => {
+    openNoticeModal(t.mdEntryNoMarkdown);
+  }, [openNoticeModal, t.mdEntryNoMarkdown]);
+  const notifyPermissionDenied = useCallback(() => {
+    openNoticeModal(t.mdEntryPermissionDenied ?? "Folder access was not granted");
+  }, [openNoticeModal, t.mdEntryPermissionDenied]);
+
+  useEffect(() => {
+    if (!noMarkdownModalOpen || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setNoMarkdownModalOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [noMarkdownModalOpen]);
+
+  const openFolderPicker = useCallback(async () => {
+    if (typeof window !== "undefined" && typeof window.showDirectoryPicker === "function") {
+      try {
+        const directoryHandle = await window.showDirectoryPicker({ mode: "read" });
+
+        if (typeof directoryHandle.requestPermission === "function") {
+          const permissionState = await directoryHandle.requestPermission({ mode: "read" });
+          if (permissionState !== "granted") {
+            notifyPermissionDenied();
+            return;
+          }
+        }
+
+        const containsMarkdown = await directoryContainsMarkdown(directoryHandle);
+
+        if (!containsMarkdown) {
+          notifyNoMarkdown();
+          return;
+        }
+
+        const entries = await collectFilesFromDirectoryHandle(directoryHandle);
+        navigateToMd(entries);
+        return;
+      } catch (error) {
+        const errorName = typeof error === "object" && error ? error.name : "";
+
+        if (
+          errorName === "AbortError" ||
+          errorName === "NotAllowedError" ||
+          errorName === "SecurityError"
+        ) {
+          notifyPermissionDenied();
+          return;
+        }
+      }
+    }
+
+    folderInputRef.current?.click();
+  }, [navigateToMd, notifyNoMarkdown, notifyPermissionDenied]);
+
+  const onFolderInputChange = useCallback(
+    (event) => {
+      const files = Array.from(event.target.files ?? []);
+
+      if (!files.length) {
+        event.target.value = "";
+        return;
+      }
+
+      const entries = files.map((file) => ({
+        path: file.webkitRelativePath || file.name,
+        file
+      }));
+
+      if (!hasMarkdownEntries(entries)) {
+        notifyNoMarkdown();
+        event.target.value = "";
+        return;
+      }
+
+      navigateToMd(entries);
+      event.target.value = "";
+    },
+    [navigateToMd, notifyNoMarkdown]
+  );
   const featureItems = [
     { title: t.f1Title, desc: t.f1Desc },
     { title: t.f2Title, desc: t.f2Desc },
@@ -320,6 +598,19 @@ function App() {
     { title: t.f5Title, desc: t.f5Desc },
     { title: t.f6Title, desc: t.f6Desc }
   ];
+
+  if (pathname === "/md") {
+    return (
+        <MdViewerPage
+          initialEntries={mdInitialEntries}
+          onInitialEntriesConsumed={() => setMdInitialEntries([])}
+          language={language}
+          onLanguageChange={onLanguageChange}
+          languageOptions={LANGUAGES}
+          productName={productName}
+        />
+    );
+  }
 
   return (
     <>
@@ -338,10 +629,10 @@ function App() {
                 </svg>
               </span>
               <select
-                id="lang-select"
-                value={language}
-                onChange={(event) => setLanguage(event.target.value)}
-              >
+                  id="lang-select"
+                  value={language}
+                  onChange={(event) => onLanguageChange(event.target.value)}
+                >
                 {LANGUAGES.map((item) => (
                   <option value={item.code} key={item.code}>
                     {item.label}
@@ -397,6 +688,56 @@ function App() {
           </div>
         </section>
 
+        <section className="md-entry-section" aria-label="markdown drop entry">
+          <input
+            ref={folderInputRef}
+            type="file"
+            webkitdirectory=""
+            multiple
+            className="sr-only"
+            onChange={onFolderInputChange}
+          />
+          <h2>{t.mdEntryHeading}</h2>
+          <MdEntryPanel
+            title={t.mdEntryTitle}
+            sub={t.mdEntrySub}
+            ctaLabel={t.mdEntryCta}
+            isDragging={mdEntryDragging}
+            ariaLabel="拖入文件夹后进入 Markdown 渲染页面"
+            onPanelClick={openFolderPicker}
+            onPanelKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openFolderPicker();
+              }
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setMdEntryDragging(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setMdEntryDragging(false);
+            }}
+            onDrop={async (event) => {
+              event.preventDefault();
+              setMdEntryDragging(false);
+
+              try {
+                const droppedFiles = await collectFilesFromDataTransfer(event.dataTransfer);
+                if (!hasMarkdownEntries(droppedFiles)) {
+                  notifyNoMarkdown();
+                  return;
+                }
+                navigateToMd(droppedFiles);
+              } catch {
+                notifyNoMarkdown();
+              }
+            }}
+            onCtaClick={openFolderPicker}
+          />
+        </section>
+
         <section className="cta">
           <h2>{t.lastCtaTitle}</h2>
           <p>{t.lastCtaDesc}</p>
@@ -407,39 +748,29 @@ function App() {
         </section>
       </main>
 
-      <footer className="footer-mark">
-        <span className="footer-brand">{productName}</span>
-        <span className="footer-sep" aria-hidden="true">
-          •
-        </span>
-        <a
-          className="footer-link"
-          href="https://github.com/tt1k"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="GitHub: tt1k"
-          title="GitHub: tt1k"
+      <SiteFooter productName={productName} />
+
+      {noMarkdownModalOpen ? (
+        <div
+          className="app-modal-backdrop"
+          role="presentation"
+          onClick={closeNoMarkdownModal}
         >
-          <svg className="footer-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.12.82-.26.82-.58 0-.28-.01-1.04-.02-2.04-3.34.72-4.04-1.61-4.04-1.61-.54-1.39-1.33-1.75-1.33-1.75-1.09-.74.08-.72.08-.72 1.2.08 1.84 1.24 1.84 1.24 1.08 1.83 2.82 1.3 3.5 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.46-1.33-5.46-5.94 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.53.12-3.18 0 0 1.02-.33 3.34 1.23a11.7 11.7 0 0 1 6.08 0c2.32-1.56 3.34-1.23 3.34-1.23.67 1.65.25 2.88.12 3.18.78.84 1.24 1.9 1.24 3.22 0 4.62-2.8 5.63-5.47 5.93.43.37.82 1.1.82 2.23 0 1.61-.01 2.9-.01 3.29 0 .32.21.7.83.58A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12" />
-          </svg>
-        </a>
-        <span className="footer-sep" aria-hidden="true">
-          •
-        </span>
-        <a
-          className="footer-link"
-          href="https://x.com/zenlee1024"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="X: @zenlee1024"
-          title="X: @zenlee1024"
-        >
-          <svg className="footer-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M18.244 2H21.5l-7.12 8.14L22.5 22h-6.35l-4.97-6.5L5.5 22H2.24l7.62-8.71L1.5 2H8l4.49 5.92L18.244 2zm-1.11 18h1.76L7.96 3.9H6.08L17.13 20z" />
-          </svg>
-        </a>
-      </footer>
+          <div
+            className="app-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="markdown validation"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3>{modalCopy.title}</h3>
+            <p>{modalMessage || t.mdEntryNoMarkdown}</p>
+            <button type="button" className="btn btn-primary" onClick={closeNoMarkdownModal}>
+              {modalCopy.ok}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
