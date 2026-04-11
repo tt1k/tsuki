@@ -8,6 +8,7 @@ import SiteFooter from "./SiteFooter";
 import "./md-viewer.css";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"]);
+const RELEASE_URL = "https://github.com/tt1k/tsuki/releases";
 
 const UI_COPY = {
   ja: {
@@ -801,7 +802,9 @@ function MdViewerPage({
         nextMap.set(item.pathKey, item.file);
       }
 
-      const nextMdFiles = normalizedEntries.filter((item) => isMarkdown(item.pathKey));
+      const nextMdFiles = normalizedEntries.filter(
+        (item) => isMarkdown(item.pathKey) && !item.path.includes("/")
+      );
       const defaultPath = pickDefaultMarkdownPath(nextMdFiles);
       const defaultIndex = nextMdFiles.findIndex((item) => item.pathKey === defaultPath);
       const orderedMdFiles =
@@ -943,6 +946,11 @@ function MdViewerPage({
                 ))}
               </select>
             </label>
+          </div>
+          <div className="nav-actions">
+            <a href={RELEASE_URL} className="btn btn-primary" target="_blank" rel="noreferrer">
+              今すぐダウンロード
+            </a>
           </div>
         </div>
       </header>

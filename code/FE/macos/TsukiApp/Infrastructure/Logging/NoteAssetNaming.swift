@@ -7,6 +7,15 @@ enum NoteTheme: String, CaseIterable {
     var noteFileName: String {
         "NOTE-\(rawValue).md"
     }
+
+    var noteTitleSuffix: String {
+        switch self {
+        case .day:
+            return "Light"
+        case .night:
+            return "Dark"
+        }
+    }
 }
 
 enum NoteAssetNaming {

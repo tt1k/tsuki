@@ -19,7 +19,7 @@ enum TranslationNoteLogger {
                 for theme in NoteTheme.allCases {
                     let noteURL = noteDirectory.appendingPathComponent(theme.noteFileName, isDirectory: false)
                     if !fileManager.fileExists(atPath: noteURL.path) {
-                        let header = "# Tsuki Note \(dayFolder) (\(theme.rawValue))\n\n"
+                        let header = "# Tsuki Note \(dayFolder) \(theme.noteTitleSuffix)\n\n"
                         try header.write(to: noteURL, atomically: true, encoding: .utf8)
                     }
 
@@ -27,7 +27,7 @@ enum TranslationNoteLogger {
                     var lines: [String] = []
                     lines.append("### **\(headword)**")
                     lines.append("")
-                    lines.append("<img src=\"\(screenshotPath)\" alt=\"\(headword) \(theme.rawValue)\" width=\"360\" />")
+                    lines.append("<img src=\"\(screenshotPath)\" alt=\"\(headword) \(theme.noteTitleSuffix)\" width=\"360\" />")
                     lines.append("")
                     lines.append("")
                     lines.append("")

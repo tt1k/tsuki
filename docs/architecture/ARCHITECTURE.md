@@ -135,6 +135,7 @@
 翻译笔记：
 - 目录：`~/Library/Logs/tsuki/note/<yyyy-MM-dd>/`
 - 文件：`NOTE-day.md`、`NOTE-night.md`
+- 标题：`# Tsuki Note <yyyy-MM-dd> Light|Dark`（由主题映射生成）
 - 每次成功翻译会追加：词条标题 + 输出卡片截图引用
 - 截图文件位于 `screenshot/<headword>-day.png`、`screenshot/<headword>-night.png`
 

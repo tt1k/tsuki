@@ -16,8 +16,8 @@ enum TranslationCacheNoteExporter {
         let noteNightURL = exportDirectory.appendingPathComponent(NoteTheme.night.noteFileName, isDirectory: false)
 
         let dayLabel = LocalDateTime.noteDayString()
-        try "# Tsuki Note \(dayLabel) (day)\n\n".write(to: noteDayURL, atomically: true, encoding: .utf8)
-        try "# Tsuki Note \(dayLabel) (night)\n\n".write(to: noteNightURL, atomically: true, encoding: .utf8)
+        try "# Tsuki Note \(dayLabel) \(NoteTheme.day.noteTitleSuffix)\n\n".write(to: noteDayURL, atomically: true, encoding: .utf8)
+        try "# Tsuki Note \(dayLabel) \(NoteTheme.night.noteTitleSuffix)\n\n".write(to: noteNightURL, atomically: true, encoding: .utf8)
 
         for record in records {
             let headword = oneLine(record.result.headwordKanji)
@@ -67,7 +67,7 @@ enum TranslationCacheNoteExporter {
         var lines: [String] = []
         lines.append("### **\(headword)**")
         lines.append("")
-        lines.append("<img src=\"\(screenshotPath)\" alt=\"\(headword) \(theme.rawValue)\" width=\"360\" />")
+        lines.append("<img src=\"\(screenshotPath)\" alt=\"\(headword) \(theme.noteTitleSuffix)\" width=\"360\" />")
         lines.append("")
         lines.append("")
         lines.append("")

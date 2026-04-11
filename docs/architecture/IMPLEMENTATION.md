@@ -7,6 +7,7 @@
 
 ### 2.1 目录
 - 前端主工程：`code/fe/macos/TsukiApp`
+- Web 站点工程：`code/fe/web/tsuki-app`
 - 启动脚本：`tsuki.sh`
 - 架构文档：`docs/architecture`
 
@@ -125,6 +126,7 @@
 ### 7.2 翻译笔记
 - 目录：`~/Library/Logs/tsuki/note/<yyyy-MM-dd>/`
 - 文档：`NOTE-day.md` 与 `NOTE-night.md`
+- 文档标题：`# Tsuki Note <yyyy-MM-dd> Light|Dark`
 - 附件：`screenshot/<headword>-day.png` 与 `screenshot/<headword>-night.png`
 
 ## 8. 脚本能力（`tsuki.sh`）
@@ -132,8 +134,17 @@
 - 前端：`fe run|stop|build|test|clean|package`
 - 默认启动：`./tsuki.sh` 等同 `./tsuki.sh fe run`
 - 打包：生成 `dist/Tsuki-<version>.dmg`，并附带 CLI 安装脚本
+- 当前默认版本：`0.0.2`（`TSUKI_DEFAULT_VERSION`）
 
-## 9. 已知边界
+## 9. Web（`code/fe/web/tsuki-app`）近期实现
+
+- 首页主视觉图片从根目录重命名并归档到 `public/main/main_<lang>.png`。
+- 新增 Markdown 预览图资源：`public/markdown/markdown_<lang>.png`。
+- 首页新增 Markdown 渲染预览区块，支持多语言标题与描述文案。
+- 拖拽目录时会归一化路径并剥离公共根目录，仅将根层 `.md` 作为入口文档。
+- Markdown Viewer 导航栏新增 Release 下载入口（GitHub Releases）。
+
+## 10. 已知边界
 
 - 当前已接入 provider：`deepseek/openai/gemini/qwen/kimi`。
 - API key 仍在本地配置明文保存，未迁移 Keychain。

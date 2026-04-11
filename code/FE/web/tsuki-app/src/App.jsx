@@ -5,23 +5,50 @@ import { getMdEntryCta, getMdEntryHeading, getMdEntrySub } from "./md-entry-copy
 import SiteFooter from "./SiteFooter";
 import { collectFilesFromDataTransfer } from "./md-drop-utils";
 
+function normalizeEntryPath(path = "") {
+  return String(path)
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "")
+    .replace(/\/+/g, "/");
+}
+
+function stripCommonRootFolder(entries) {
+  if (entries.length <= 1) {
+    return entries;
+  }
+
+  const firstSegment = entries[0].path.split("/")[0];
+  if (!firstSegment) {
+    return entries;
+  }
+
+  const hasSingleRoot = entries.every((item) => item.path.startsWith(`${firstSegment}/`));
+  if (!hasSingleRoot) {
+    return entries;
+  }
+
+  return entries.map((item) => ({
+    ...item,
+    path: item.path.slice(firstSegment.length + 1)
+  }));
+}
+
 function hasMarkdownEntries(entries = []) {
-  return entries.some((item) => /\.md$/i.test(item.path || ""));
+  const normalized = stripCommonRootFolder(
+    entries.map((item) => ({
+      ...item,
+      path: normalizeEntryPath(item.path || "")
+    }))
+  );
+
+  return normalized.some((item) => /\.md$/i.test(item.path) && !item.path.includes("/"));
 }
 
 async function directoryContainsMarkdown(rootHandle) {
-  const stack = [rootHandle];
-
-  while (stack.length) {
-    const current = stack.pop();
-    for await (const entry of current.values()) {
-      if (entry.kind === "file" && /\.md$/i.test(entry.name)) {
-        return true;
-      }
-
-      if (entry.kind === "directory") {
-        stack.push(entry);
-      }
+  for await (const entry of rootHandle.values()) {
+    if (entry.kind === "file" && /\.md$/i.test(entry.name)) {
+      return true;
     }
   }
 
@@ -73,15 +100,66 @@ const PRODUCT_NAMES = {
 };
 
 const PRODUCT_IMAGES = {
-  ja: "/product_ja.png",
-  "zh-CN": "/product_zh-CN.png",
-  "zh-TW": "/product_zh-TW.png",
-  en: "/product_en.png",
-  ko: "/product_ko.png",
-  es: "/product_es.png",
-  fr: "/product_fr.png",
-  de: "/product_de.png",
-  ru: "/product_ru.png"
+  ja: "/main/main_ja.png",
+  "zh-CN": "/main/main_zh-CN.png",
+  "zh-TW": "/main/main_zh-TW.png",
+  en: "/main/main_en.png",
+  ko: "/main/main_ko.png",
+  es: "/main/main_es.png",
+  fr: "/main/main_fr.png",
+  de: "/main/main_de.png",
+  ru: "/main/main_ru.png"
+};
+
+const MARKDOWN_IMAGES = {
+  ja: "/markdown/markdown_ja.png",
+  "zh-CN": "/markdown/markdown_zh-CN.png",
+  "zh-TW": "/markdown/markdown_zh-TW.png",
+  en: "/markdown/markdown_en.png",
+  ko: "/markdown/markdown_kr.png",
+  es: "/markdown/markdown_es.png",
+  fr: "/markdown/markdown_fr.png",
+  de: "/markdown/markdown_de.png",
+  ru: "/markdown/markdown_ru.png"
+};
+
+const MARKDOWN_PREVIEW_COPY = {
+  ja: {
+    title: "Markdown レンダーの最終イメージ",
+    desc: "フォルダをドロップすると自動組版；スタイルをカスタマイズして、閲覧と出力をもっと手軽に"
+  },
+  "zh-CN": {
+    title: "Markdown 渲染后的展示样式",
+    desc: "拖入目录自动排版，支持自定义样式，轻松浏览与导出"
+  },
+  "zh-TW": {
+    title: "Markdown 渲染後的展示樣式",
+    desc: "拖入目錄自動排版，支援自訂樣式，輕鬆瀏覽與匯出"
+  },
+  en: {
+    title: "How Markdown will look",
+    desc: "Drop a folder for automatic layout, customize styles, and browse or export with ease"
+  },
+  ko: {
+    title: "Markdown 렌더 미리보기",
+    desc: "폴더를 드롭하면 자동으로 레이아웃이 정리되고, 스타일을 커스터마이즈해 쉽게 열람하고 내보낼 수 있습니다"
+  },
+  es: {
+    title: "Vista final de Markdown",
+    desc: "Suelta una carpeta para maquetado automatico, personaliza el estilo y navega o exporta facilmente"
+  },
+  fr: {
+    title: "Apercu final Markdown",
+    desc: "Deposez un dossier pour une mise en page automatique, personnalisez le style et parcourez ou exportez facilement"
+  },
+  de: {
+    title: "So sieht Markdown aus",
+    desc: "Ordner ablegen fur automatische Formatierung, Stil anpassen und Inhalte einfach lesen oder exportieren"
+  },
+  ru: {
+    title: "Predprosmotr Markdown",
+    desc: "Dobavte papku dlia avtomaticheskoi verstki, nastroite stil i legko prosmatrivaĭte ili eksportiruĭte"
+  }
 };
 
 const MODAL_COPY = {
@@ -493,6 +571,11 @@ function App() {
   const modalCopy = useMemo(() => MODAL_COPY[language] ?? MODAL_COPY.ja, [language]);
   const productName = useMemo(() => PRODUCT_NAMES[language] ?? PRODUCT_NAMES.ja, [language]);
   const productImage = useMemo(() => PRODUCT_IMAGES[language] ?? PRODUCT_IMAGES.ja, [language]);
+  const markdownImage = useMemo(() => MARKDOWN_IMAGES[language] ?? MARKDOWN_IMAGES.ja, [language]);
+  const markdownPreviewCopy = useMemo(
+    () => MARKDOWN_PREVIEW_COPY[language] ?? MARKDOWN_PREVIEW_COPY.en,
+    [language]
+  );
   const closeNoMarkdownModal = useCallback(() => {
     setNoMarkdownModalOpen(false);
     setModalMessage("");
@@ -736,6 +819,13 @@ function App() {
             }}
             onCtaClick={openFolderPicker}
           />
+          <div className="md-entry-preview" aria-label="markdown preview image">
+            <p className="md-entry-preview-kicker">{markdownPreviewCopy.title}</p>
+            <p className="md-entry-preview-sub">{markdownPreviewCopy.desc}</p>
+            <div className="hero-card md-entry-preview-card">
+              <img src={markdownImage} alt={`${productName} markdown preview`} loading="lazy" />
+            </div>
+          </div>
         </section>
 
         <section className="cta">

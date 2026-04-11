@@ -512,6 +512,30 @@ h1 {
   margin-top: 22px;
 }
 
+.md-entry-preview {
+  margin-top: 20px;
+  text-align: center;
+  animation: riseIn 0.7s ease both;
+}
+
+.md-entry-preview-kicker {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-title);
+  font-size: 20px;
+}
+
+.md-entry-preview-sub {
+  margin: 8px auto 0;
+  color: var(--muted);
+  width: min(760px, 100%);
+}
+
+.md-entry-preview-card {
+  width: min(760px, 100%);
+  margin: 14px auto 0;
+}
+
 .cta h2 {
   font-family: var(--font-title);
   font-size: clamp(24px, 4vw, 38px);
