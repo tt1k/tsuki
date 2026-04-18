@@ -6,6 +6,7 @@ enum DesignTokens {
         static let textMain = dynamicColor(dark: DarkColorPalette.textMain, light: LightColorPalette.textMain)
         static let textDim = dynamicColor(dark: DarkColorPalette.textDim, light: LightColorPalette.textDim)
         static let windowBG = dynamicColor(dark: DarkColorPalette.windowBG, light: LightColorPalette.windowBG)
+        static let windowGlassBG = dynamicColor(dark: DarkColorPalette.windowGlassBG, light: LightColorPalette.windowGlassBG)
         static let boxIdle = dynamicColor(dark: DarkColorPalette.boxIdle, light: LightColorPalette.boxIdle)
         static let boxHover = dynamicColor(dark: DarkColorPalette.boxHover, light: LightColorPalette.boxHover)
         static let borderIdle = dynamicColor(dark: DarkColorPalette.borderIdle, light: LightColorPalette.borderIdle)
@@ -22,6 +23,54 @@ enum DesignTokens {
         static let furigana = dynamicColor(dark: DarkColorPalette.furigana, light: LightColorPalette.furigana)
         static let controlFill = dynamicColor(dark: DarkColorPalette.controlFill, light: LightColorPalette.controlFill)
         static let windowBGNS = dynamicNSColor(dark: DarkColorPalette.windowBG, light: LightColorPalette.windowBG)
+        static let windowGlassBGNS = dynamicNSColor(dark: DarkColorPalette.windowGlassBG, light: LightColorPalette.windowGlassBG)
+
+        static func boxIdle(opacity: Double) -> Color {
+            dynamicColor(
+                dark: scaledColor(DarkColorPalette.boxIdle, by: opacity),
+                light: scaledColor(LightColorPalette.boxIdle, by: opacity)
+            )
+        }
+
+        static func boxHover(opacity: Double) -> Color {
+            dynamicColor(
+                dark: scaledColor(DarkColorPalette.boxHover, by: opacity),
+                light: scaledColor(LightColorPalette.boxHover, by: opacity)
+            )
+        }
+
+        static func borderIdle(opacity: Double) -> Color {
+            dynamicColor(
+                dark: scaledColor(DarkColorPalette.borderIdle, by: opacity),
+                light: scaledColor(LightColorPalette.borderIdle, by: opacity)
+            )
+        }
+
+        static func borderHover(opacity: Double) -> Color {
+            dynamicColor(
+                dark: scaledColor(DarkColorPalette.borderHover, by: opacity),
+                light: scaledColor(LightColorPalette.borderHover, by: opacity)
+            )
+        }
+
+        static func controlFill(opacity: Double) -> Color {
+            dynamicColor(
+                dark: scaledColor(DarkColorPalette.controlFill, by: opacity),
+                light: scaledColor(LightColorPalette.controlFill, by: opacity)
+            )
+        }
+
+        static func windowGlassBG(opacity: Double) -> Color {
+            Color(nsColor: windowGlassBGNS(opacity: opacity))
+        }
+
+        static func windowGlassBGNS(opacity: Double) -> NSColor {
+            let clampedOpacity = CGFloat(min(max(opacity, 0), 1))
+            return dynamicNSColor(
+                dark: DarkColorPalette.windowBG.withAlphaComponent(clampedOpacity),
+                light: LightColorPalette.windowBG.withAlphaComponent(clampedOpacity)
+            )
+        }
 
         private static func dynamicColor(dark: NSColor, light: NSColor) -> Color {
             Color(nsColor: dynamicNSColor(dark: dark, light: light))
@@ -35,6 +84,11 @@ enum DesignTokens {
                 }
                 return light
             }
+        }
+
+        private static func scaledColor(_ color: NSColor, by opacity: Double) -> NSColor {
+            let clampedOpacity = CGFloat(min(max(opacity, 0), 1))
+            return color.withAlphaComponent(color.alphaComponent * clampedOpacity)
         }
     }
 

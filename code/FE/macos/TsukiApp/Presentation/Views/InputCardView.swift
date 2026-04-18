@@ -14,6 +14,7 @@ struct InputCardView: View {
     let onInputWithinLimit: () -> Void
 
     @FocusState private var focused: Bool
+    @EnvironmentObject private var settingsStore: SettingsStore
     @State private var isHovered = false
     @State private var inputLocked = false
     @State private var shouldMoveCaretOnFocus = false
@@ -129,10 +130,19 @@ struct InputCardView: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: DesignTokens.Size.cardRadius, style: .continuous)
-            .fill(isHovered ? DesignTokens.ColorToken.boxHover : DesignTokens.ColorToken.boxIdle)
+            .fill(
+                isHovered
+                    ? DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                    : DesignTokens.ColorToken.boxIdle(opacity: settingsStore.windowGlassOpacity)
+            )
             .overlay {
                 RoundedRectangle(cornerRadius: DesignTokens.Size.cardRadius, style: .continuous)
-                    .stroke(isHovered ? DesignTokens.ColorToken.borderHover : DesignTokens.ColorToken.borderIdle, lineWidth: DesignTokens.Size.cardBorder)
+                    .stroke(
+                        isHovered
+                            ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                            : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                        lineWidth: DesignTokens.Size.cardBorder
+                    )
             }
     }
 
@@ -142,7 +152,10 @@ struct InputCardView: View {
                 .font(DesignTokens.FontToken.icon)
                 .foregroundStyle(color)
                 .frame(width: 24, height: 24)
-                .background(DesignTokens.ColorToken.controlFill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .background(
+                    DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity),
+                    in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                )
         }
         .buttonStyle(.plain)
     }
@@ -151,7 +164,7 @@ struct InputCardView: View {
         Button(action: handleTranslateTapped) {
             ZStack {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(DesignTokens.ColorToken.controlFill)
+                    .fill(DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity))
 
                 if isTranslating {
                     LoadingRotateIcon()

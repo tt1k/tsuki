@@ -33,7 +33,8 @@ struct MainWindowView: View {
             OutputCardView(
                 result: viewModel.result,
                 outputTitle: viewModel.outputTitle,
-                outputMessage: viewModel.outputMessage
+                outputMessage: viewModel.outputMessage,
+                uiOpacity: settingsStore.windowGlassOpacity
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -41,7 +42,7 @@ struct MainWindowView: View {
         .padding(.vertical, DesignTokens.Size.outerPadding)
         .background {
             RoundedRectangle(cornerRadius: DesignTokens.Size.windowRadius, style: .continuous)
-                .fill(DesignTokens.ColorToken.windowBG)
+                .fill(DesignTokens.ColorToken.windowGlassBG(opacity: settingsStore.windowGlassOpacity))
         }
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Size.windowRadius, style: .continuous))
         .ignoresSafeArea(.container, edges: .top)

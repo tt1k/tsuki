@@ -4,6 +4,7 @@ enum LightColorPalette {
     static let textMain = NSColor(red: 38 / 255, green: 38 / 255, blue: 38 / 255, alpha: 1)
     static let textDim = NSColor(red: 108 / 255, green: 108 / 255, blue: 112 / 255, alpha: 1)
     static let windowBG = NSColor(red: 244 / 255, green: 244 / 255, blue: 242 / 255, alpha: 1)
+    static let windowGlassBG = NSColor(red: 244 / 255, green: 244 / 255, blue: 242 / 255, alpha: 0.36)
     static let boxIdle = NSColor(red: 1, green: 1, blue: 1, alpha: 0.9)
     static let boxHover = NSColor(red: 236 / 255, green: 236 / 255, blue: 234 / 255, alpha: 0.95)
     static let borderIdle = NSColor(white: 0, alpha: 0.08)

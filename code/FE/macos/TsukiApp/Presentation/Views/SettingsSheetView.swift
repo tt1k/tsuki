@@ -3,6 +3,7 @@ import SwiftUI
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
     case general
+    case appearance
     case database
     case shortcuts
     case about
@@ -12,6 +13,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: "gearshape"
+        case .appearance: "circle.lefthalf.filled"
         case .database: "cylinder"
         case .shortcuts: "pencil.circle"
         case .about: "info.circle"
@@ -62,14 +64,17 @@ struct SettingsSheetView: View {
     @State private var isEditingAPIKey = false
     @State private var hasInitializedLogs = false
     @State private var databaseEntryCount = 0
+    @State private var isShowingDatabaseEditor = false
     @State private var isExportingDatabase = false
     @State private var isClearingDatabase = false
     @State private var hoveredTab: SettingsTab?
     @State private var isAPIKeyButtonHovered = false
     @State private var isNotePathButtonHovered = false
     @State private var isDatabasePathButtonHovered = false
+    @State private var isEditButtonHovered = false
     @State private var isExportButtonHovered = false
     @State private var isClearButtonHovered = false
+    @State private var lastOpacityHapticMark = -1
     @FocusState private var focusedTab: SettingsTab?
     @FocusState private var apiKeyEditorFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -78,16 +83,20 @@ struct SettingsSheetView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(DesignTokens.ColorToken.borderIdle)
+            Divider().overlay(DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity))
 
             HStack(spacing: 0) {
                 sideBar
-                Divider().overlay(DesignTokens.ColorToken.borderIdle)
+                Divider().overlay(DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity))
                 detailArea
             }
         }
-        .frame(width: 700, height: 500)
-        .background(DesignTokens.ColorToken.windowBG)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            Rectangle()
+                .fill(DesignTokens.ColorToken.windowGlassBG(opacity: settingsStore.windowGlassOpacity))
+                .ignoresSafeArea(.container, edges: .top)
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             if isEditingAPIKey {
@@ -97,6 +106,7 @@ struct SettingsSheetView: View {
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             refreshAPIKeyInput()
+            lastOpacityHapticMark = Int((settingsStore.windowGlassOpacity * 100).rounded())
             DispatchQueue.main.async {
                 focusedTab = .general
             }
@@ -119,14 +129,22 @@ struct SettingsSheetView: View {
             }
         }
         .onChange(of: settingsStore.appearanceMode) { _ in
-            (NSApp.delegate as? AppDelegate)?.applyAppearanceMode(settingsStore.appearanceMode)
+            (NSApp.delegate as? AppDelegate)?.applyAppearanceMode(
+                settingsStore.appearanceMode,
+                windowGlassOpacity: settingsStore.windowGlassOpacity
+            )
             if hasInitializedLogs {
                 AppEventLogger.log("Settings changed: appearanceMode=\(settingsStore.appearanceMode.rawValue)")
             }
         }
-        .onChange(of: settingsStore.screenshotAppearanceMode) { _ in
+        .onChange(of: settingsStore.windowGlassOpacity) { _ in
+            (NSApp.delegate as? AppDelegate)?.applyAppearanceMode(
+                settingsStore.appearanceMode,
+                windowGlassOpacity: settingsStore.windowGlassOpacity
+            )
+            triggerOpacityHapticIfNeeded()
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: screenshotAppearanceMode=\(settingsStore.screenshotAppearanceMode.rawValue)")
+                AppEventLogger.log("Settings changed: windowGlassOpacity=\(settingsStore.windowGlassOpacity)")
             }
         }
         .onChange(of: settingsStore.dockIconVisible) { _ in
@@ -156,6 +174,13 @@ struct SettingsSheetView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 (NSApp.delegate as? AppDelegate)?.applyDockIconVisibility(settingsStore.dockIconVisible)
             }
+        }
+        .sheet(isPresented: $isShowingDatabaseEditor) {
+            DatabaseEditorSheetView(
+                cacheStore: cacheStore,
+                language: settingsStore.language,
+                onRecordsChanged: refreshDatabaseInfo
+            )
         }
     }
 
@@ -192,6 +217,14 @@ struct SettingsSheetView: View {
         .padding(.bottom, 14)
     }
 
+    private func triggerOpacityHapticIfNeeded() {
+        let percent = Int((settingsStore.windowGlassOpacity * 100).rounded())
+        let mark = percent / 2
+        guard mark != lastOpacityHapticMark / 2 else { return }
+        lastOpacityHapticMark = percent
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
+
     private var sideBar: some View {
         VStack(spacing: 10) {
             ForEach(SettingsTab.allCases) { tab in
@@ -209,17 +242,17 @@ struct SettingsSheetView: View {
                         .background {
                             if selectedTab == tab {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(DesignTokens.ColorToken.boxHover)
+                                    .fill(DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity))
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .stroke(DesignTokens.ColorToken.borderHover, lineWidth: 0.6)
+                                            .stroke(DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity), lineWidth: 0.6)
                                     }
                             } else if hoveredTab == tab {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(DesignTokens.ColorToken.controlFill)
+                                    .fill(DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity))
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .stroke(DesignTokens.ColorToken.borderIdle, lineWidth: 0.6)
+                                            .stroke(DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity), lineWidth: 0.6)
                                     }
                             }
                         }
@@ -238,11 +271,10 @@ struct SettingsSheetView: View {
     }
 
     private var detailArea: some View {
-        ScrollView {
-            contentPanel
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
+        contentPanel
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(.clear)
     }
 
     @ViewBuilder
@@ -250,42 +282,6 @@ struct SettingsSheetView: View {
         switch selectedTab {
         case .general:
             VStack(spacing: 10) {
-                    HStack {
-                        Text(localizedText(en: "App Theme", zhCN: "应用主题", zhTW: "應用主題", ja: "アプリテーマ"))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                        Spacer()
-
-                        Picker("Theme", selection: $settingsStore.appearanceMode) {
-                            ForEach(AppearanceMode.allCases, id: \.rawValue) { option in
-                                Text(appearanceModeTitle(option)).tag(option)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 120)
-                        .tint(DesignTokens.ColorToken.textMain)
-                    }
-
-                    HStack {
-                        Text(localizedText(en: "Screenshot Theme", zhCN: "截图主题", zhTW: "截圖主題", ja: "スクリーンショットテーマ"))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                        Spacer()
-
-                        Picker("Screenshot Theme", selection: $settingsStore.screenshotAppearanceMode) {
-                            ForEach(ScreenshotAppearanceMode.allCases, id: \.rawValue) { option in
-                                Text(screenshotAppearanceModeTitle(option)).tag(option)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 120)
-                        .tint(DesignTokens.ColorToken.textMain)
-                    }
-
                     HStack {
                         Text(localizedText(en: "Language", zhCN: "语言", zhTW: "語言", ja: "言語"))
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
@@ -342,7 +338,7 @@ struct SettingsSheetView: View {
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .stroke(DesignTokens.ColorToken.borderIdle, lineWidth: 0.8)
+                                        .stroke(DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity), lineWidth: 0.8)
                                 )
                                 .focused($apiKeyEditorFocused)
                                 .onSubmit {
@@ -364,11 +360,20 @@ struct SettingsSheetView: View {
                                 .frame(width: 260, height: 24)
                                 .background(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(isAPIKeyButtonHovered ? DesignTokens.ColorToken.boxHover : apiKeyFieldBackgroundColor)
+                                        .fill(
+                                            isAPIKeyButtonHovered
+                                                ? DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                                                : apiKeyFieldBackgroundColor
+                                        )
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .stroke(isAPIKeyButtonHovered ? DesignTokens.ColorToken.borderHover : DesignTokens.ColorToken.borderIdle, lineWidth: 0.8)
+                                        .stroke(
+                                            isAPIKeyButtonHovered
+                                                ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                                : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                            lineWidth: 0.8
+                                        )
                                 )
                             }
                             .buttonStyle(.plain)
@@ -404,7 +409,11 @@ struct SettingsSheetView: View {
                                     .frame(width: 260, alignment: .trailing)
                                     .background(
                                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                            .fill(isNotePathButtonHovered ? DesignTokens.ColorToken.controlFill : .clear)
+                                            .fill(
+                                                isNotePathButtonHovered
+                                                    ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                                    : .clear
+                                            )
                                     )
                             }
                             .buttonStyle(.plain)
@@ -422,6 +431,46 @@ struct SettingsSheetView: View {
                         }
                     }
                 }
+        case .appearance:
+            VStack(spacing: 10) {
+                HStack {
+                    Text(localizedText(en: "App Theme", zhCN: "应用主题", zhTW: "應用主題", ja: "アプリテーマ"))
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                    Spacer()
+
+                    Picker("Theme", selection: $settingsStore.appearanceMode) {
+                        ForEach(AppearanceMode.allCases, id: \.rawValue) { option in
+                            Text(appearanceModeTitle(option)).tag(option)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                    .tint(DesignTokens.ColorToken.textMain)
+                }
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text(opacityTitle)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                    Spacer()
+
+                    HStack(spacing: 3) {
+                        Slider(value: $settingsStore.windowGlassOpacity, in: 0.70 ... 1.00, step: 0.01)
+                            .frame(width: 112)
+                            .tint(DesignTokens.ColorToken.textDim)
+
+                        Text(windowOpacityText)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .foregroundStyle(DesignTokens.ColorToken.textMain)
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                    .frame(width: 160, alignment: .trailing)
+                }
+            }
         case .database:
             VStack(spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
@@ -457,7 +506,11 @@ struct SettingsSheetView: View {
                             .frame(width: 260, alignment: .trailing)
                             .background(
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(isDatabasePathButtonHovered ? DesignTokens.ColorToken.controlFill : .clear)
+                                    .fill(
+                                        isDatabasePathButtonHovered
+                                            ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                            : .clear
+                                    )
                             )
                     }
                     .buttonStyle(.plain)
@@ -487,11 +540,20 @@ struct SettingsSheetView: View {
                         .frame(width: 120, height: 24)
                         .background(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(isExportButtonHovered ? DesignTokens.ColorToken.controlFill : DesignTokens.ColorToken.boxHover)
+                                .fill(
+                                    isExportButtonHovered
+                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                        : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                                )
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(isExportButtonHovered ? DesignTokens.ColorToken.borderHover : DesignTokens.ColorToken.borderIdle, lineWidth: 0.8)
+                                .stroke(
+                                    isExportButtonHovered
+                                        ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                        : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                    lineWidth: 0.8
+                                )
                         )
                     }
                     .buttonStyle(.plain)
@@ -521,16 +583,65 @@ struct SettingsSheetView: View {
                         .frame(width: 120, height: 24)
                         .background(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(isClearButtonHovered ? DesignTokens.ColorToken.controlFill : DesignTokens.ColorToken.boxHover)
+                                .fill(
+                                    isClearButtonHovered
+                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                        : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                                )
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(isClearButtonHovered ? DesignTokens.ColorToken.borderHover : DesignTokens.ColorToken.borderIdle, lineWidth: 0.8)
+                                .stroke(
+                                    isClearButtonHovered
+                                        ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                        : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                    lineWidth: 0.8
+                                )
                         )
                     }
                     .buttonStyle(.plain)
                     .onHover { isHovered in
                         isClearButtonHovered = isHovered
+                    }
+                    .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
+                }
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text(localizedText(en: "Edit Records", zhCN: "编辑记录", zhTW: "編輯記錄", ja: "レコード編集"))
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                    Spacer()
+
+                    Button {
+                        AppEventLogger.log("Database editor opened")
+                        isShowingDatabaseEditor = true
+                    } label: {
+                        Text(localizedText(en: "Edit", zhCN: "编辑", zhTW: "編輯", ja: "編集"))
+                            .font(.system(size: 13, weight: .regular, design: .monospaced))
+                            .foregroundStyle(DesignTokens.ColorToken.textMain)
+                            .frame(width: 120, height: 24)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(
+                                        isEditButtonHovered
+                                            ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                            : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                                    )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(
+                                        isEditButtonHovered
+                                            ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                            : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                        lineWidth: 0.8
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isHovered in
+                        isEditButtonHovered = isHovered
                     }
                     .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
                 }
@@ -581,9 +692,7 @@ struct SettingsSheetView: View {
     }
 
     private var appVersion: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
-        return "\(version)-build-\(build)"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
     }
 
     private var appDisplayName: String {
@@ -610,6 +719,31 @@ struct SettingsSheetView: View {
             zhTW: "未設定",
             ja: "未設定"
         )
+    }
+
+    private var windowOpacityText: String {
+        "\(Int((settingsStore.windowGlassOpacity * 100).rounded()))%"
+    }
+
+    private var opacityTitle: String {
+        switch settingsStore.language {
+        case "zh-CN", "zh-TW":
+            return "透明度"
+        case "ja":
+            return "透明度"
+        case "ko":
+            return "불투명도"
+        case "es":
+            return "Opacidad"
+        case "fr":
+            return "Opacité"
+        case "de":
+            return "Deckkraft"
+        case "ru":
+            return "Прозрачность"
+        default:
+            return "Opacity"
+        }
     }
 
     private var noteDirectoryPath: String? {
@@ -648,7 +782,7 @@ struct SettingsSheetView: View {
         panel.canCreateDirectories = true
         panel.prompt = localizedText(en: "Export", zhCN: "导出", zhTW: "匯出", ja: "書き出す")
         panel.message = localizedText(
-            en: "Choose a folder to save NOTE-day.md, NOTE-night.md and screenshots.",
+            en: "Choose a folder to save NOTE-day.md, NOTE-night.md and screenshots",
             zhCN: "选择导出目录，将生成 NOTE-day.md、NOTE-night.md 和截图",
             zhTW: "選擇匯出資料夾，將產生 NOTE-day.md、NOTE-night.md 與截圖",
             ja: "NOTE-day.md、NOTE-night.md とスクリーンショットの保存先フォルダを選択してください"
@@ -758,7 +892,7 @@ struct SettingsSheetView: View {
                     ja: "消去完了"
                 )
                 doneAlert.informativeText = localizedText(
-                    en: "Removed \(removed) cached entries.",
+                    en: "Removed \(removed) cached entries",
                     zhCN: "已删除 \(removed) 条缓存记录",
                     zhTW: "已刪除 \(removed) 筆快取記錄",
                     ja: "\(removed) 件のキャッシュを削除しました"
@@ -834,6 +968,8 @@ struct SettingsSheetView: View {
         switch tab {
         case .general:
             return localizedText(en: "General", zhCN: "通用", zhTW: "一般", ja: "一般")
+        case .appearance:
+            return localizedText(en: "Appearance", zhCN: "外观", zhTW: "外觀", ja: "外観")
         case .database:
             return localizedText(en: "Database", zhCN: "数据库", zhTW: "資料庫", ja: "データベース")
         case .shortcuts:
@@ -910,35 +1046,6 @@ struct SettingsSheetView: View {
             switch option {
             case .dark: return "Dark"
             case .light: return "Light"
-            case .auto: return "Auto"
-            }
-        }
-    }
-
-    private func screenshotAppearanceModeTitle(_ option: ScreenshotAppearanceMode) -> String {
-        switch settingsStore.language {
-        case "zh-CN":
-            switch option {
-            case .light: return "浅色"
-            case .dark: return "深色"
-            case .auto: return "跟随系统"
-            }
-        case "zh-TW":
-            switch option {
-            case .light: return "淺色"
-            case .dark: return "深色"
-            case .auto: return "跟隨系統"
-            }
-        case "ja":
-            switch option {
-            case .light: return "ライト"
-            case .dark: return "ダーク"
-            case .auto: return "システム"
-            }
-        default:
-            switch option {
-            case .light: return "Light"
-            case .dark: return "Dark"
             case .auto: return "Auto"
             }
         }

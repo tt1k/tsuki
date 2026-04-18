@@ -30,19 +30,13 @@ enum AppearanceMode: String, Codable, CaseIterable {
     }
 }
 
-enum ScreenshotAppearanceMode: String, Codable, CaseIterable {
-    case light
-    case dark
-    case auto
-}
-
 @MainActor
 final class SettingsStore: ObservableObject {
     private struct ConfigFile: Codable {
         var provider: String
         var language: String
         var appearanceMode: String
-        var screenshotAppearanceMode: String
+        var windowGlassOpacity: Double
         var shortcutEnabled: Bool
         var dockIconVisible: Bool
         var forceTopRightOnLaunch: Bool
@@ -52,7 +46,7 @@ final class SettingsStore: ObservableObject {
             case provider
             case language
             case appearanceMode
-            case screenshotAppearanceMode
+            case windowGlassOpacity
             case shortcutEnabled
             case dockIconVisible
             case forceTopRightOnLaunch
@@ -63,7 +57,7 @@ final class SettingsStore: ObservableObject {
             provider: String,
             language: String,
             appearanceMode: String,
-            screenshotAppearanceMode: String,
+            windowGlassOpacity: Double,
             shortcutEnabled: Bool,
             dockIconVisible: Bool,
             forceTopRightOnLaunch: Bool,
@@ -72,7 +66,7 @@ final class SettingsStore: ObservableObject {
             self.provider = provider
             self.language = language
             self.appearanceMode = appearanceMode
-            self.screenshotAppearanceMode = screenshotAppearanceMode
+            self.windowGlassOpacity = windowGlassOpacity
             self.shortcutEnabled = shortcutEnabled
             self.dockIconVisible = dockIconVisible
             self.forceTopRightOnLaunch = forceTopRightOnLaunch
@@ -84,11 +78,17 @@ final class SettingsStore: ObservableObject {
             provider = try container.decode(String.self, forKey: .provider)
             language = try container.decode(String.self, forKey: .language)
             appearanceMode = try container.decodeIfPresent(String.self, forKey: .appearanceMode) ?? Defaults.appearanceMode.rawValue
-            screenshotAppearanceMode = try container.decodeIfPresent(String.self, forKey: .screenshotAppearanceMode) ?? Defaults.screenshotAppearanceMode.rawValue
+            windowGlassOpacity = Self.clampWindowGlassOpacity(
+                try container.decodeIfPresent(Double.self, forKey: .windowGlassOpacity) ?? Defaults.windowGlassOpacity
+            )
             shortcutEnabled = try container.decode(Bool.self, forKey: .shortcutEnabled)
             dockIconVisible = try container.decodeIfPresent(Bool.self, forKey: .dockIconVisible) ?? Defaults.dockIconVisible
             forceTopRightOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .forceTopRightOnLaunch) ?? Defaults.forceTopRightOnLaunch
             apiKeys = try container.decodeIfPresent([String: String].self, forKey: .apiKeys) ?? [:]
+        }
+
+        private static func clampWindowGlassOpacity(_ value: Double) -> Double {
+            min(max(value, 0.70), 1.00)
         }
     }
 
@@ -96,7 +96,7 @@ final class SettingsStore: ObservableObject {
         static let provider = "deepseek"
         static let language = "en"
         static let appearanceMode: AppearanceMode = .dark
-        static let screenshotAppearanceMode: ScreenshotAppearanceMode = .light
+        static let windowGlassOpacity = 0.86
         static let shortcutEnabled = true
         static let dockIconVisible = true
         static let forceTopRightOnLaunch = true
@@ -121,8 +121,15 @@ final class SettingsStore: ObservableObject {
         didSet { saveIfNeeded() }
     }
 
-    @Published var screenshotAppearanceMode: ScreenshotAppearanceMode {
-        didSet { saveIfNeeded() }
+    @Published var windowGlassOpacity: Double {
+        didSet {
+            let clamped = Self.clampWindowGlassOpacity(windowGlassOpacity)
+            if windowGlassOpacity != clamped {
+                windowGlassOpacity = clamped
+                return
+            }
+            saveIfNeeded()
+        }
     }
 
     @Published var shortcutEnabled: Bool {
@@ -151,7 +158,7 @@ final class SettingsStore: ObservableObject {
         self.provider = Defaults.provider
         self.language = Defaults.language
         self.appearanceMode = Defaults.appearanceMode
-        self.screenshotAppearanceMode = Defaults.screenshotAppearanceMode
+        self.windowGlassOpacity = Defaults.windowGlassOpacity
         self.shortcutEnabled = Defaults.shortcutEnabled
         self.dockIconVisible = Defaults.dockIconVisible
         self.forceTopRightOnLaunch = Defaults.forceTopRightOnLaunch
@@ -181,7 +188,7 @@ final class SettingsStore: ObservableObject {
         let normalizedLanguage = Self.normalizeLanguageCode(snapshot.language)
         language = supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language
         appearanceMode = AppearanceMode(rawValue: snapshot.appearanceMode) ?? Defaults.appearanceMode
-        screenshotAppearanceMode = ScreenshotAppearanceMode(rawValue: snapshot.screenshotAppearanceMode) ?? Defaults.screenshotAppearanceMode
+        windowGlassOpacity = Self.clampWindowGlassOpacity(snapshot.windowGlassOpacity)
         shortcutEnabled = snapshot.shortcutEnabled
         dockIconVisible = snapshot.dockIconVisible
         forceTopRightOnLaunch = snapshot.forceTopRightOnLaunch
@@ -200,7 +207,7 @@ final class SettingsStore: ObservableObject {
             provider: supportedProviders.contains(provider) ? provider : Defaults.provider,
             language: supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language,
             appearanceMode: appearanceMode.rawValue,
-            screenshotAppearanceMode: screenshotAppearanceMode.rawValue,
+            windowGlassOpacity: Self.clampWindowGlassOpacity(windowGlassOpacity),
             shortcutEnabled: shortcutEnabled,
             dockIconVisible: dockIconVisible,
             forceTopRightOnLaunch: forceTopRightOnLaunch,
@@ -247,5 +254,9 @@ final class SettingsStore: ObservableObject {
 
     private static func normalizeLanguageCode(_ language: String) -> String {
         language
+    }
+
+    private static func clampWindowGlassOpacity(_ value: Double) -> Double {
+        min(max(value, 0.70), 1.00)
     }
 }

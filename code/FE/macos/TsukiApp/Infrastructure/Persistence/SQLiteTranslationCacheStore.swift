@@ -3,6 +3,7 @@ import SQLite3
 
 actor SQLiteTranslationCacheStore: TranslationCacheStore {
     struct CachedRecord {
+        let id: Int64
         let queryText: String
         let queryTextNormalized: String
         let sourceLang: String
@@ -174,7 +175,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         guard let db else { return [] }
 
         let sql = """
-        SELECT query_text, query_text_norm, source_lang, target_lang, result_json, updated_at
+        SELECT id, query_text, query_text_norm, source_lang, target_lang, result_json, updated_at
         FROM translation_cache
         ORDER BY updated_at DESC;
         """
@@ -200,21 +201,22 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             }
 
             guard
-                let queryTextRaw = sqlite3_column_text(statement, 0),
-                let queryTextNormRaw = sqlite3_column_text(statement, 1),
-                let sourceLangRaw = sqlite3_column_text(statement, 2),
-                let targetLangRaw = sqlite3_column_text(statement, 3),
-                let resultJSONRaw = sqlite3_column_text(statement, 4)
+                let queryTextRaw = sqlite3_column_text(statement, 1),
+                let queryTextNormRaw = sqlite3_column_text(statement, 2),
+                let sourceLangRaw = sqlite3_column_text(statement, 3),
+                let targetLangRaw = sqlite3_column_text(statement, 4),
+                let resultJSONRaw = sqlite3_column_text(statement, 5)
             else {
                 continue
             }
 
+            let id = sqlite3_column_int64(statement, 0)
             let queryText = String(cString: queryTextRaw)
             let queryTextNorm = String(cString: queryTextNormRaw)
             let sourceLang = String(cString: sourceLangRaw)
             let targetLang = String(cString: targetLangRaw)
             let resultJSON = String(cString: resultJSONRaw)
-            let updatedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 5))
+            let updatedAt = Date(timeIntervalSince1970: sqlite3_column_double(statement, 6))
 
             guard let data = resultJSON.data(using: .utf8) else {
                 continue
@@ -224,6 +226,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
                 let result = try decoder.decode(TranslationResult.self, from: data)
                 records.append(
                     CachedRecord(
+                        id: id,
                         queryText: queryText,
                         queryTextNormalized: queryTextNorm,
                         sourceLang: sourceLang,
@@ -238,6 +241,32 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         }
 
         return records
+    }
+
+    func deleteRecords(ids: [Int64]) async -> Int {
+        guard let db, !ids.isEmpty else { return 0 }
+
+        let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+        let sql = "DELETE FROM translation_cache WHERE id IN (\(placeholders));"
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            logSQLiteError(prefix: "CACHE_DB_PREPARE_DELETE_FAIL", db: db)
+            return 0
+        }
+        defer { sqlite3_finalize(statement) }
+
+        for (index, id) in ids.enumerated() {
+            sqlite3_bind_int64(statement, Int32(index + 1), id)
+        }
+
+        let step = sqlite3_step(statement)
+        guard step == SQLITE_DONE else {
+            logSQLiteError(prefix: "CACHE_DB_DELETE_FAIL", db: db)
+            return 0
+        }
+
+        return Int(sqlite3_changes64(db))
     }
 
     func clearAllRecords() async -> Int {

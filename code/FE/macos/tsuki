@@ -6,12 +6,523 @@ usage() {
   cat <<'EOF'
 Usage:
   tsuki "text to translate"
-  echo "text to translate" | tsuki
+  tsuki re
 EOF
+}
+
+run_review() {
+  local db_path="$HOME/Library/Application Support/tsuki/translation-cache.sqlite3"
+
+  python3 - "$db_path" <<'PY'
+import os
+import random
+import sqlite3
+import sys
+import termios
+import tty
+import unicodedata
+
+QUESTION_COUNT = 10
+ANSI_RESET = "\x1b[0m"
+ANSI_BOLD = "\x1b[1m"
+ANSI_CYAN = "\x1b[36m"
+ANSI_YELLOW = "\x1b[33m"
+ANSI_GREEN = "\x1b[32m"
+ANSI_RED = "\x1b[31m"
+ANSI_DIM = "\x1b[2m"
+
+
+def paint(text: str, *styles: str):
+    if not COLOR_ENABLED:
+        return text
+    return "".join(styles) + text + ANSI_RESET
+
+
+def load_entries(database_path: str):
+    if not os.path.exists(database_path):
+        print(f"Error: database not found at {database_path}", file=sys.stderr)
+        sys.exit(1)
+
+    conn = sqlite3.connect(database_path)
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+              trim(json_extract(result_json, '$.headwordKanji')) AS headword,
+              trim(coalesce(json_extract(result_json, '$.headwordKana'), '')) AS headword_kana,
+              trim(json_extract(result_json, '$.meaning')) AS meaning,
+              updated_at
+            FROM translation_cache
+            WHERE json_extract(result_json, '$.headwordKanji') IS NOT NULL
+              AND json_extract(result_json, '$.meaning') IS NOT NULL
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    except sqlite3.Error as exc:
+        print(f"Error: failed to read sqlite data: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+    dedup = {}
+    for headword, headword_kana, meaning, updated_at in rows:
+        if not headword or not meaning:
+            continue
+        if headword in dedup:
+            continue
+        dedup[headword] = (headword_kana, meaning, updated_at)
+
+    entries = [(headword, kana, meaning) for headword, (kana, meaning, _) in dedup.items()]
+    if len(entries) < QUESTION_COUNT:
+        print(
+            f"Error: not enough words for review. Need at least {QUESTION_COUNT}, found {len(entries)}.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if len(entries) < 3:
+        print("Error: need at least 3 words to generate choices.", file=sys.stderr)
+        sys.exit(1)
+
+    return entries
+
+
+def ask_question(index: int, total: int, headword: str, headword_kana: str, correct: str, entries):
+    wrong_pool = [meaning for candidate, _, meaning in entries if candidate != headword and meaning != correct]
+    if len(wrong_pool) < 2:
+        print("Error: not enough distinct meanings to generate wrong choices.", file=sys.stderr)
+        sys.exit(1)
+
+    wrong_choices = random.sample(wrong_pool, 2)
+    choices = [correct, *wrong_choices]
+    random.shuffle(choices)
+
+    correct_index = choices.index(correct)
+    selected_index, handled_inline = choose_option(index, total, headword, headword_kana, choices, correct_index)
+    selected_choice = choices[selected_index]
+
+    if handled_inline:
+        return 1 if selected_choice == correct else 0
+
+    if selected_choice == correct:
+        print(paint("Correct!", ANSI_GREEN, ANSI_BOLD))
+        wait_for_next_question()
+        return 1
+
+    print(paint(f"Wrong. Correct option: {correct_index + 1}", ANSI_RED, ANSI_BOLD))
+    wait_for_next_question()
+    return 0
+
+
+def wait_for_next_question():
+    if not getattr(INPUT_READER, "isatty", lambda: False)():
+        return
+
+    WRITER.write(paint("Press Enter to continue...", ANSI_DIM) + "\n")
+    WRITER.flush()
+
+    while True:
+        raw = INPUT_READER.readline()
+        if raw == "":
+            raise EOFError
+        if raw in ("\n", "\r\n", "\r"):
+            return
+
+
+def choose_option(index: int, total: int, headword: str, headword_kana: str, choices, correct_index: int):
+    if TTY_IN is None or TTY_OUT is None or not TTY_IN.isatty() or not TTY_OUT.isatty():
+        return choose_option_fallback(index, total, headword, headword_kana, choices)
+
+    return choose_option_interactive(index, total, headword, headword_kana, choices, correct_index)
+
+
+def choose_option_fallback(index: int, total: int, headword: str, headword_kana: str, choices):
+    labels = ["A", "B", "C"]
+
+    display_word = format_word_line(headword, headword_kana)
+    print(f"\n[{index}/{total}] {display_word}")
+
+    for idx, choice in enumerate(choices):
+        print(f"{labels[idx]}. {choice}")
+
+    while True:
+        WRITER.write("Choose (A/B/C): ")
+        WRITER.flush()
+        raw = INPUT_READER.readline()
+        if raw == "":
+            raise EOFError
+        raw = raw.strip().upper()
+        if raw in labels:
+            return labels.index(raw), False
+        print("Invalid input. Please enter A, B, or C.")
+
+
+def choose_option_interactive(index: int, total: int, headword: str, headword_kana: str, choices, correct_index: int):
+    selected = 0
+    revealed = False
+    fd = TTY_IN.fileno()
+    old_attrs = termios.tcgetattr(fd)
+
+    try:
+        tty.setcbreak(fd)
+        while True:
+            draw_question(index, total, headword, headword_kana, choices, selected, revealed, correct_index)
+            key = os.read(fd, 1)
+
+            if key in (b"\r", b"\n"):
+                if not revealed:
+                    revealed = True
+                    continue
+
+                WRITER.write("\x1b[2J\x1b[H\x1b[?25h")
+                WRITER.flush()
+                return selected, True
+
+            if key == b"\x03":
+                raise KeyboardInterrupt
+
+            if key == b"\x1b":
+                sequence = os.read(fd, 2)
+                if revealed:
+                    continue
+                if sequence == b"[A":
+                    selected = (selected - 1) % len(choices)
+                elif sequence == b"[B":
+                    selected = (selected + 1) % len(choices)
+                continue
+
+            if revealed:
+                continue
+
+            if key in (b"k", b"K"):
+                selected = (selected - 1) % len(choices)
+            elif key in (b"j", b"J"):
+                selected = (selected + 1) % len(choices)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)
+        WRITER.write("\x1b[?25h")
+        WRITER.flush()
+
+
+def draw_question(index: int, total: int, headword: str, headword_kana: str, choices, selected: int, revealed: bool, correct_index: int):
+    columns, rows = get_terminal_size()
+    max_columns = max(20, columns)
+    max_rows = max(8, rows)
+
+    display_word = format_word_line(headword, headword_kana)
+
+    lines = [
+        f"Tsuki Review [{index}/{total}]",
+        "",
+        f"Word: {display_word}",
+        "",
+    ]
+
+    for idx, choice in enumerate(choices):
+        if not revealed:
+            marker = "[>] " if idx == selected else "[ ] "
+        else:
+            if idx == correct_index:
+                marker = "[+] "
+            elif idx == selected:
+                marker = "[-] "
+            else:
+                marker = "[ ] "
+        indent = " " * len(marker)
+        content_width = max(6, max_columns - display_width(marker))
+        wrapped = wrap_to_width(choice, content_width)
+        if not wrapped:
+            wrapped = [""]
+
+        for line_index, chunk in enumerate(wrapped):
+            prefix = marker if line_index == 0 else indent
+            lines.append(f"{prefix}{chunk}")
+
+    if revealed:
+        lines.append("")
+        if selected == correct_index:
+            lines.append("Result: Correct!")
+        else:
+            lines.append(f"Correct option: {correct_index + 1}")
+        lines.append("Press Enter to continue...")
+
+    fitted = [truncate_to_width(line, max_columns) for line in lines]
+    if len(fitted) > max_rows:
+        fitted = fitted[: max_rows - 1]
+        fitted.append(truncate_to_width("...(resize terminal for more)", max_columns))
+
+    WRITER.write("\x1b[?25l\x1b[2J\x1b[H")
+    styled_lines = [style_review_line(line) for line in fitted]
+    WRITER.write("\n".join(styled_lines) + "\n")
+    WRITER.flush()
+
+
+def style_review_line(line: str):
+    if line.startswith("Tsuki Review"):
+        return paint(line, ANSI_CYAN, ANSI_BOLD)
+    if line.startswith("Choose review mode"):
+        return paint(line, ANSI_YELLOW, ANSI_BOLD)
+    if line.startswith("Word: "):
+        return paint(line, ANSI_YELLOW, ANSI_BOLD)
+    if line.startswith("[>] "):
+        return paint(line, ANSI_GREEN, ANSI_BOLD)
+    if line.startswith("[+] "):
+        return paint(line, ANSI_GREEN, ANSI_BOLD)
+    if line.startswith("[-] "):
+        return paint(line, ANSI_RED, ANSI_BOLD)
+    if line.startswith("[ ] "):
+        return paint(line, ANSI_DIM)
+    if line.startswith("Result: Correct!"):
+        return paint(line, ANSI_GREEN, ANSI_BOLD)
+    if line.startswith("Result: Wrong"):
+        return paint(line, ANSI_RED, ANSI_BOLD)
+    if line.startswith("Correct option: "):
+        return paint(line, ANSI_RED, ANSI_BOLD)
+    if line.startswith("Press Enter to continue..."):
+        return paint(line, ANSI_DIM)
+    return line
+
+
+def get_terminal_size():
+    if TTY_OUT is None:
+        return (80, 24)
+    try:
+        return os.get_terminal_size(TTY_OUT.fileno())
+    except OSError:
+        return (80, 24)
+
+
+def wrap_to_width(text: str, width: int):
+    if width <= 0:
+        return [""]
+
+    chunks = []
+    current = ""
+    current_width = 0
+
+    for char in text:
+        char_width = char_display_width(char)
+        if current and current_width + char_width > width:
+            chunks.append(current)
+            current = char
+            current_width = char_width
+        else:
+            current += char
+            current_width += char_width
+
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def truncate_to_width(text: str, width: int):
+    if display_width(text) <= width:
+        return text
+
+    if width <= 1:
+        return "…"[:width]
+
+    result = ""
+    result_width = 0
+    limit = width - 1
+
+    for char in text:
+        char_width = char_display_width(char)
+        if result_width + char_width > limit:
+            break
+        result += char
+        result_width += char_width
+
+    return result + "…"
+
+
+def display_width(text: str):
+    return sum(char_display_width(char) for char in text)
+
+
+def char_display_width(char: str):
+    if unicodedata.combining(char):
+        return 0
+    if unicodedata.east_asian_width(char) in ("W", "F"):
+        return 2
+    return 1
+
+
+def format_word_line(headword: str, headword_kana: str):
+    if headword_kana:
+        return f"{headword}「{headword_kana}」"
+    return f"{headword}「」"
+
+
+def main():
+    database_path = sys.argv[1]
+    entries = load_entries(database_path)
+    questions = select_questions(entries)
+
+    score = 0
+    print(f"Tsuki Review: {QUESTION_COUNT} questions")
+    print("Select the correct meaning for each word.")
+
+    try:
+        for idx, (headword, headword_kana, meaning) in enumerate(questions, start=1):
+            score += ask_question(idx, QUESTION_COUNT, headword, headword_kana, meaning, entries)
+    except (EOFError, KeyboardInterrupt):
+        print("\nReview interrupted.")
+        sys.exit(1)
+
+    percent = int(round((score / QUESTION_COUNT) * 100))
+    print(f"\nResult: {score}/{QUESTION_COUNT} ({percent}%)")
+
+
+def select_questions(entries):
+    mode = choose_review_mode()
+    if mode == "recent":
+        return entries[:QUESTION_COUNT]
+    return random.sample(entries, QUESTION_COUNT)
+
+
+def choose_review_mode():
+    if not getattr(INPUT_READER, "isatty", lambda: False)():
+        return "random"
+
+    if TTY_IN is not None and TTY_OUT is not None and TTY_IN.isatty() and TTY_OUT.isatty():
+        try:
+            return choose_review_mode_interactive()
+        except Exception:
+            pass
+
+    WRITER.write("\nChoose review mode:\n")
+    WRITER.write("1. 最近10个\n")
+    WRITER.write("2. 随机10个\n")
+    WRITER.write("Select (1/2, default 2): ")
+    WRITER.flush()
+
+    while True:
+        raw = INPUT_READER.readline()
+        if raw == "":
+            raise EOFError
+
+        choice = raw.strip().lower()
+        if choice == "":
+            return "random"
+        if choice in ("1", "recent", "r"):
+            return "recent"
+        if choice in ("2", "random"):
+            return "random"
+
+        WRITER.write("Please enter 1 or 2: ")
+        WRITER.flush()
+
+
+def choose_review_mode_interactive():
+    options = [
+        ("recent", "最近10个"),
+        ("random", "随机10个"),
+    ]
+    selected = 1
+    fd = TTY_IN.fileno()
+    old_attrs = termios.tcgetattr(fd)
+
+    try:
+        tty.setcbreak(fd)
+        while True:
+            draw_mode_menu(options, selected)
+            key = os.read(fd, 1)
+
+            if key in (b"\r", b"\n"):
+                WRITER.write("\x1b[2J\x1b[H\x1b[?25h")
+                WRITER.flush()
+                return options[selected][0]
+
+            if key == b"\x03":
+                raise KeyboardInterrupt
+
+            if key == b"\x1b":
+                sequence = os.read(fd, 2)
+                if sequence == b"[A":
+                    selected = (selected - 1) % len(options)
+                elif sequence == b"[B":
+                    selected = (selected + 1) % len(options)
+                continue
+
+            if key in (b"k", b"K"):
+                selected = (selected - 1) % len(options)
+            elif key in (b"j", b"J"):
+                selected = (selected + 1) % len(options)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)
+        WRITER.write("\x1b[?25h")
+        WRITER.flush()
+
+
+def draw_mode_menu(options, selected: int):
+    columns, rows = get_terminal_size()
+    max_columns = max(20, columns)
+    max_rows = max(8, rows)
+
+    lines = [
+        "Tsuki Review",
+        "",
+        "Choose review mode",
+        "",
+    ]
+
+    for idx, (_, label) in enumerate(options):
+        marker = "[>] " if idx == selected else "[ ] "
+        lines.append(f"{marker}{label}")
+
+    fitted = [truncate_to_width(line, max_columns) for line in lines]
+    if len(fitted) > max_rows:
+        fitted = fitted[:max_rows]
+
+    WRITER.write("\x1b[?25l\x1b[2J\x1b[H")
+    styled_lines = [style_review_line(line) for line in fitted]
+    WRITER.write("\n".join(styled_lines) + "\n")
+    WRITER.flush()
+
+
+if __name__ == "__main__":
+    TTY_IN = None
+    TTY_OUT = None
+
+    try:
+        TTY_IN = open("/dev/tty", "r", encoding="utf-8", newline="")
+    except OSError:
+        TTY_IN = None
+    else:
+        if not TTY_IN.isatty():
+            TTY_IN.close()
+            TTY_IN = None
+
+    try:
+        TTY_OUT = open("/dev/tty", "w", encoding="utf-8", newline="")
+    except OSError:
+        TTY_OUT = None
+    else:
+        if not TTY_OUT.isatty():
+            TTY_OUT.close()
+            TTY_OUT = None
+
+    INPUT_READER = TTY_IN if TTY_IN is not None else sys.stdin
+    WRITER = TTY_OUT if TTY_OUT is not None else sys.stdout
+    COLOR_ENABLED = bool(getattr(WRITER, "isatty", lambda: False)())
+
+    main()
+
+    if TTY_IN is not None:
+        TTY_IN.close()
+    if TTY_OUT is not None:
+        TTY_OUT.close()
+PY
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
   usage
+  exit 0
+fi
+
+if [[ "${1:-}" == "re" ]]; then
+  run_review
   exit 0
 fi
 

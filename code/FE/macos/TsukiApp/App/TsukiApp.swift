@@ -33,11 +33,15 @@ struct TsukiApp: App {
                     appDelegate.applyDockIconVisibility(settingsStore.dockIconVisible)
                     appDelegate.configureWindowIfNeeded(
                         forceTopRightOnLaunch: true,
-                        appearanceMode: settingsStore.appearanceMode
+                        appearanceMode: settingsStore.appearanceMode,
+                        windowGlassOpacity: settingsStore.windowGlassOpacity
                     )
                 }
                 .onChange(of: settingsStore.appearanceMode) { mode in
-                    appDelegate.applyAppearanceMode(mode)
+                    appDelegate.applyAppearanceMode(mode, windowGlassOpacity: settingsStore.windowGlassOpacity)
+                }
+                .onChange(of: settingsStore.windowGlassOpacity) { opacity in
+                    appDelegate.applyAppearanceMode(settingsStore.appearanceMode, windowGlassOpacity: opacity)
                 }
         }
         .windowStyle(.hiddenTitleBar)

@@ -5,18 +5,21 @@ struct OutputCardView: View {
     let outputTitle: String?
     let outputMessage: String?
     let cardCornerRadius: CGFloat
+    let uiOpacity: Double
     @State private var isHovered = false
 
     init(
         result: TranslationResult?,
         outputTitle: String?,
         outputMessage: String?,
-        cardCornerRadius: CGFloat = DesignTokens.Size.cardRadius
+        cardCornerRadius: CGFloat = DesignTokens.Size.cardRadius,
+        uiOpacity: Double = 1
     ) {
         self.result = result
         self.outputTitle = outputTitle
         self.outputMessage = outputMessage
         self.cardCornerRadius = cardCornerRadius
+        self.uiOpacity = uiOpacity
     }
 
     var body: some View {
@@ -41,10 +44,19 @@ struct OutputCardView: View {
         .padding(.vertical, 18)
         .background {
             RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                .fill(isHovered ? DesignTokens.ColorToken.boxHover : DesignTokens.ColorToken.boxIdle)
+                .fill(
+                    isHovered
+                        ? DesignTokens.ColorToken.boxHover(opacity: uiOpacity)
+                        : DesignTokens.ColorToken.boxIdle(opacity: uiOpacity)
+                )
                 .overlay {
                     RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
-                        .stroke(isHovered ? DesignTokens.ColorToken.borderHover : DesignTokens.ColorToken.borderIdle, lineWidth: DesignTokens.Size.cardBorder)
+                        .stroke(
+                            isHovered
+                                ? DesignTokens.ColorToken.borderHover(opacity: uiOpacity)
+                                : DesignTokens.ColorToken.borderIdle(opacity: uiOpacity),
+                            lineWidth: DesignTokens.Size.cardBorder
+                        )
                 }
         }
         .onHover { hovering in

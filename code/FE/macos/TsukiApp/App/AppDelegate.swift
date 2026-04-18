@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private weak var mainWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var pendingURLText: String?
+    private let settingsWindowSize = NSSize(width: 700, height: 500)
 
     override init() {
         super.init()
@@ -55,13 +56,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func configureWindowIfNeeded(
         forceTopRightOnLaunch: Bool,
         appearanceMode: AppearanceMode,
+        windowGlassOpacity: Double,
         retriesLeft: Int = 40
     ) {
         if let window = resolveMainWindow() {
             configureMainWindow(
                 window,
                 forceTopRightOnLaunch: forceTopRightOnLaunch,
-                appearanceMode: appearanceMode
+                appearanceMode: appearanceMode,
+                windowGlassOpacity: windowGlassOpacity
             )
             return
         }
@@ -75,18 +78,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self.configureWindowIfNeeded(
                 forceTopRightOnLaunch: forceTopRightOnLaunch,
                 appearanceMode: appearanceMode,
+                windowGlassOpacity: windowGlassOpacity,
                 retriesLeft: retriesLeft - 1
             )
         }
     }
 
-    func applyAppearanceMode(_ mode: AppearanceMode) {
+    func applyAppearanceMode(_ mode: AppearanceMode, windowGlassOpacity: Double = 0.86) {
         if let window = mainWindow ?? NSApp.windows.first {
-            applyAppearanceMode(mode, to: window)
+            applyAppearanceMode(mode, to: window, windowGlassOpacity: windowGlassOpacity)
         }
 
         if let settingsWindow {
-            applyAppearanceMode(mode, to: settingsWindow)
+            applyAppearanceMode(mode, to: settingsWindow, windowGlassOpacity: windowGlassOpacity)
         }
     }
 
@@ -94,6 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         DispatchQueue.main.async {
             AppEventLogger.log("Opening settings window")
             if let window = self.settingsWindow {
+                self.configureSettingsWindowChrome(window)
+                self.applyAppearanceMode(
+                    settingsStore.appearanceMode,
+                    to: window,
+                    windowGlassOpacity: settingsStore.windowGlassOpacity
+                )
                 window.center()
                 window.makeKeyAndOrderFront(nil)
                 NSApp.activate(ignoringOtherApps: true)
@@ -106,21 +116,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let hostingController = NSHostingController(rootView: settingsView)
             let window = NSWindow(contentViewController: hostingController)
 
-            window.title = "Settings"
-            window.styleMask = [.titled, .closable, .fullSizeContentView]
-            window.titleVisibility = .hidden
-            window.titlebarAppearsTransparent = true
-            window.isMovableByWindowBackground = true
-            window.titlebarSeparatorStyle = .none
-            window.isOpaque = true
-            self.applyAppearanceMode(settingsStore.appearanceMode, to: window)
-            window.standardWindowButton(.closeButton)?.isHidden = true
-            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-            window.standardWindowButton(.zoomButton)?.isHidden = true
+            self.configureSettingsWindowChrome(window)
+            self.applyAppearanceMode(
+                settingsStore.appearanceMode,
+                to: window,
+                windowGlassOpacity: settingsStore.windowGlassOpacity
+            )
             window.isReleasedWhenClosed = false
-            window.minSize = NSSize(width: 700, height: 500)
-            window.maxSize = NSSize(width: 700, height: 500)
-            window.setContentSize(NSSize(width: 700, height: 500))
+            window.minSize = self.settingsWindowSize
+            window.maxSize = self.settingsWindowSize
+            window.setContentSize(self.settingsWindowSize)
             window.center()
             window.delegate = self
 
@@ -132,9 +137,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func applyAppearanceMode(_ mode: AppearanceMode, to window: NSWindow) {
+    private func configureSettingsWindowChrome(_ window: NSWindow) {
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.titlebarSeparatorStyle = .none
+        window.setContentBorderThickness(0, for: .minY)
+        window.isOpaque = false
+        enforceHiddenWindowButtons(on: window)
+    }
+
+    private func applyAppearanceMode(_ mode: AppearanceMode, to window: NSWindow, windowGlassOpacity: Double) {
         window.appearance = mode.windowAppearance
-        window.backgroundColor = DesignTokens.ColorToken.windowBGNS
+        window.backgroundColor = DesignTokens.ColorToken.windowGlassBGNS(opacity: windowGlassOpacity)
     }
 
     private func resolveMainWindow() -> NSWindow? {
@@ -156,7 +173,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func configureMainWindow(
         _ window: NSWindow,
         forceTopRightOnLaunch: Bool,
-        appearanceMode: AppearanceMode
+        appearanceMode: AppearanceMode,
+        windowGlassOpacity: Double
     ) {
         mainWindow = window
         window.identifier = NSUserInterfaceItemIdentifier("main-window")
@@ -164,8 +182,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
-        applyAppearanceMode(appearanceMode, to: window)
-        window.isOpaque = true
+        applyAppearanceMode(appearanceMode, to: window, windowGlassOpacity: windowGlassOpacity)
+        window.isOpaque = false
         window.hasShadow = true
         window.isMovableByWindowBackground = true
         enforceHiddenWindowButtons(on: window)

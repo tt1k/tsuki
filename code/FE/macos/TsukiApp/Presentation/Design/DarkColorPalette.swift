@@ -4,6 +4,7 @@ enum DarkColorPalette {
     static let textMain = NSColor(red: 229 / 255, green: 229 / 255, blue: 229 / 255, alpha: 1)
     static let textDim = NSColor(red: 119 / 255, green: 119 / 255, blue: 119 / 255, alpha: 1)
     static let windowBG = NSColor(red: 20 / 255, green: 20 / 255, blue: 20 / 255, alpha: 1)
+    static let windowGlassBG = NSColor(red: 20 / 255, green: 20 / 255, blue: 20 / 255, alpha: 0.80)
     static let boxIdle = NSColor(red: 45 / 255, green: 45 / 255, blue: 45 / 255, alpha: 0.5)
     static let boxHover = NSColor(red: 60 / 255, green: 60 / 255, blue: 60 / 255, alpha: 0.75)
     static let borderIdle = NSColor(white: 1, alpha: 0.04)
