@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MdEntryPanel from "./MdEntryPanel";
-import MdViewerPage from "./MdViewerPage";
 import { getMdEntryCta, getMdEntryHeading, getMdEntrySub } from "./md-entry-copy";
 import SiteFooter from "./SiteFooter";
+import {
+  getFallbackLandingPack,
+  loadLandingLanguagePack,
+  preloadLandingLanguagePack
+} from "./i18n/landing";
 import { collectFilesFromDataTransfer } from "./md-drop-utils";
+
+const MdViewerPage = lazy(() => import("./MdViewerPage"));
 
 function normalizeEntryPath(path = "") {
   return String(path)
@@ -43,16 +49,6 @@ function hasMarkdownEntries(entries = []) {
   );
 
   return normalized.some((item) => /\.md$/i.test(item.path) && !item.path.includes("/"));
-}
-
-async function directoryContainsMarkdown(rootHandle) {
-  for await (const entry of rootHandle.values()) {
-    if (entry.kind === "file" && /\.md$/i.test(entry.name)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 async function collectFilesFromDirectoryHandle(directoryHandle, parentPath = "") {
@@ -123,371 +119,7 @@ const MARKDOWN_IMAGES = {
   ru: "/markdown/markdown_ru.png"
 };
 
-const MARKDOWN_PREVIEW_COPY = {
-  ja: {
-    title: "Markdown レンダーの最終イメージ",
-    desc: "フォルダをドロップすると自動組版；スタイルをカスタマイズして、閲覧と出力をもっと手軽に"
-  },
-  "zh-CN": {
-    title: "Markdown 渲染后的展示样式",
-    desc: "拖入目录自动排版，支持自定义样式，轻松浏览与导出"
-  },
-  "zh-TW": {
-    title: "Markdown 渲染後的展示樣式",
-    desc: "拖入目錄自動排版，支援自訂樣式，輕鬆瀏覽與匯出"
-  },
-  en: {
-    title: "How Markdown will look",
-    desc: "Drop a folder for automatic layout, customize styles, and browse or export with ease"
-  },
-  ko: {
-    title: "Markdown 렌더 미리보기",
-    desc: "폴더를 드롭하면 자동으로 레이아웃이 정리되고, 스타일을 커스터마이즈해 쉽게 열람하고 내보낼 수 있습니다"
-  },
-  es: {
-    title: "Vista final de Markdown",
-    desc: "Suelta una carpeta para maquetado automatico, personaliza el estilo y navega o exporta facilmente"
-  },
-  fr: {
-    title: "Apercu final Markdown",
-    desc: "Deposez un dossier pour une mise en page automatique, personnalisez le style et parcourez ou exportez facilement"
-  },
-  de: {
-    title: "So sieht Markdown aus",
-    desc: "Ordner ablegen fur automatische Formatierung, Stil anpassen und Inhalte einfach lesen oder exportieren"
-  },
-  ru: {
-    title: "Predprosmotr Markdown",
-    desc: "Dobavte papku dlia avtomaticheskoi verstki, nastroite stil i legko prosmatrivaĭte ili eksportiruĭte"
-  }
-};
-
-const MODAL_COPY = {
-  ja: { title: "お知らせ", ok: "了解です" },
-  "zh-CN": { title: "提示", ok: "确定" },
-  "zh-TW": { title: "提示", ok: "確定" },
-  en: { title: "Notice", ok: "OK" },
-  ko: { title: "안내", ok: "확인" },
-  es: { title: "Aviso", ok: "Aceptar" },
-  fr: { title: "Information", ok: "OK" },
-  de: { title: "Hinweis", ok: "OK" },
-  ru: { title: "Уведомление", ok: "ОК" }
-};
-
-const COPY = {
-  ja: {
-    heroTitleLine1: "翻訳はもっと速く",
-    heroTitleLine2: "理解はもっと深く",
-    heroTitleLine3: "月の言葉",
-    heroDesc: "没入感あるダークUIでつくった、語学学習向けデスクトップ翻訳アプリ",
-    ctaPrimary: "無料で試す",
-    ctaSecondary: "機能を見る",
-    sectionFeatureTitle: "翻訳流れを継続的高效に",
-    f1Title: "ワンクリックで即翻訳",
-    f1Desc: "すぐに呼び出せて、そのまま発話を翻訳；思考を止めない操作体験です",
-    f2Title: "Tsuki CLIでアプリ横断の秒翻訳",
-    f2Desc: "Tsuki CLI で、他アプリから即座に翻訳へ接続できます",
-    f3Title: "語形・発音・例文を一画面表示",
-    f3Desc: "必要な語彙情報を分散させず、理解に必要な要素を一度に確認できます",
-    f4Title: "例文トークン強調 + ふりがな表示",
-    f4Desc: "分かち書きと読み情報を同時に示し、長文でも視線移動を減らして読めます",
-    f5Title: "Dark / Light テーマ切换",
-    f5Desc: "シーンに応じてテーマを切り替えられ、日中を問わず快適",
-    f6Title: "翻訳を自動蓄積して学習資産化",
-    f6Desc: "当日 NOTE.md と画像の保存まで自動で完了、手動整理不要",
-    resultTitle: "訳すだけで終わらない",
-    resultDesc:
-      "文脈内の語彙情報を構造化して可視化；トークン強調で要点をすぐに把握できます",
-    previewInput: "Input",
-    previewResult: "Result",
-    lastCtaTitle: "すべての翻訳を、定着する学習へ",
-    lastCtaDesc: "月の言葉で入力・理解・記憶の流れをつなげましょう",
-    lastCtaBtn: "今すぐダウンロード",
-    statusReady: "Ready",
-    mdEntryHeading: getMdEntryHeading("ja"),
-    mdEntryTitle: "フォルダをここにドロップ",
-    mdEntrySub: getMdEntrySub("ja"),
-    mdEntryCta: getMdEntryCta("ja"),
-    mdEntryNoMarkdown: "このフォルダには Markdown ファイルがありません",
-    mdEntryPermissionDenied: "フォルダへのアクセスが許可されませんでした"
-  },
-  "zh-CN": {
-    heroTitleLine1: "翻译速度更快更准",
-    heroTitleLine2: "内容理解更深更透",
-    heroTitleLine3: "言叶之月",
-    heroDesc: "采用沉浸式深色视觉，打造面向语言学习的桌面翻译工具",
-    ctaPrimary: "免费体验",
-    ctaSecondary: "查看功能",
-    sectionFeatureTitle: "让翻译流程持续高效",
-    f1Title: "一键唤起，开口即译",
-    f1Desc: "快速调起并立即翻译，不打断当前工作流",
-    f2Title: "支持 Tsuki CLI 跨应用秒翻",
-    f2Desc: "通过 tsuki cli 在任意应用间无缝跳转翻译",
-    f3Title: "词形、读音、释义、例句一屏看全",
-    f3Desc: "核心词汇信息聚合展示，减少来回切换成本",
-    f4Title: "例句分词高亮 + 假名标注",
-    f4Desc: "阅读路径更清晰，长句理解更直观",
-    f5Title: "Dark / Light 主题切换",
-    f5Desc: "根据场景自由切换显示风格，兼顾舒适与专注",
-    f6Title: "翻译自动沉淀为学习资产",
-    f6Desc: "当日 NOTE.md + 截图自动归档，无需手动整理",
-    resultTitle: "结果不只是翻译正确",
-    resultDesc: "在上下文中展示结构化词汇信息，用分词高亮快速定位重点",
-    previewInput: "输入",
-    previewResult: "结果",
-    lastCtaTitle: "让每次翻译都更接近掌握",
-    lastCtaDesc: "现在开始体验言叶之月，建立更顺滑的学习链路",
-    lastCtaBtn: "立即下载",
-    statusReady: "就绪",
-    mdEntryHeading: getMdEntryHeading("zh-CN"),
-    mdEntryTitle: "把文件夹拖到这里",
-    mdEntrySub: getMdEntrySub("zh-CN"),
-    mdEntryCta: getMdEntryCta("zh-CN"),
-    mdEntryNoMarkdown: "未检测到 Markdown",
-    mdEntryPermissionDenied: "权限未授予"
-  },
-  "zh-TW": {
-    heroTitleLine1: "翻譯速度更快更準",
-    heroTitleLine2: "內容理解更深更透",
-    heroTitleLine3: "言葉之月",
-    heroDesc: "採用沉浸式深色視覺，打造語言學習導向的桌面翻譯工具",
-    ctaPrimary: "免費體驗",
-    ctaSecondary: "查看功能",
-    sectionFeatureTitle: "讓翻譯流程持續高效",
-    f1Title: "一鍵喚起，開口即譯",
-    f1Desc: "快速呼叫並立即翻譯，不中斷目前工作流程",
-    f2Title: "支援 Tsuki CLI 跨應用秒翻",
-    f2Desc: "透過 Tsuki CLI 在任意應用間無縫跳轉翻譯",
-    f3Title: "詞形、讀音、釋義、例句一屏看全",
-    f3Desc: "核心詞彙資訊集中呈現，減少來回切換成本",
-    f4Title: "例句分詞高亮 + 假名標註",
-    f4Desc: "閱讀路徑更清楚，長句理解更直觀",
-    f5Title: "Dark / Light 主題切換",
-    f5Desc: "依使用情境自由切換顯示風格，兼顧舒適與專注",
-    f6Title: "翻譯自動沉澱為學習資產",
-    f6Desc: "當日 NOTE.md + 截圖自動歸檔，省去手動整理",
-    resultTitle: "結果不只翻譯正確",
-    resultDesc: "在上下文中展示結構化詞彙資訊，用分詞高亮快速定位重點",
-    previewInput: "輸入",
-    previewResult: "結果",
-    lastCtaTitle: "讓每次翻譯都更接近掌握",
-    lastCtaDesc: "現在開始體驗言葉之月，建立更流暢的學習鏈路",
-    lastCtaBtn: "立即下載",
-    statusReady: "就緒",
-    mdEntryHeading: getMdEntryHeading("zh-TW"),
-    mdEntryTitle: "把資料夾拖到這裡",
-    mdEntrySub: getMdEntrySub("zh-TW"),
-    mdEntryCta: getMdEntryCta("zh-TW"),
-    mdEntryNoMarkdown: "該資料夾中沒有 Markdown 檔案",
-    mdEntryPermissionDenied: "未取得該資料夾的存取權限"
-  },
-  en: {
-    heroTitleLine1: "Translate faster",
-    heroTitleLine2: "understand deeper",
-    heroTitleLine3: "Tsuki Translate",
-    heroDesc: "Built with an immersive dark visual language for language learning",
-    ctaPrimary: "Try for free",
-    ctaSecondary: "View features",
-    sectionFeatureTitle: "Workflow that stays in flow",
-    f1Title: "One-tap invoke, speak and translate",
-    f1Desc: "Launch quickly and translate right away without breaking your flow",
-    f2Title: "Tsuki CLI based cross-app instant translation",
-    f2Desc: "Jump in via Tsuki CLI from any app in seconds, seamless integration",
-    f3Title: "Lemma, pronunciation, senses, examples in one view",
-    f3Desc: "See all key lexical signals together instead of switching panels",
-    f4Title: "Token highlight + furigana on example lines",
-    f4Desc: "Read longer sentences faster with clearer segmentation and reading aids",
-    f5Title: "Switch between Dark / Light themes",
-    f5Desc: "Match your environment with visual comfort, day and night",
-    f6Title: "Automatic translation archive for learning",
-    f6Desc: "Daily NOTE.md entries and screenshots are saved automatically",
-    resultTitle: "More than correct translation",
-    resultDesc:
-      "See structured word-level context and jump to key chunks instantly with token highlighting",
-    previewInput: "Input",
-    previewResult: "Result",
-    lastCtaTitle: "Turn every translation into learning",
-    lastCtaDesc: "Start with Tsuki Translate and connect input, understanding, and memory",
-    lastCtaBtn: "Download now",
-    statusReady: "Ready",
-    mdEntryHeading: getMdEntryHeading("en"),
-    mdEntryTitle: "Drop a folder here",
-    mdEntrySub: getMdEntrySub("en"),
-    mdEntryCta: getMdEntryCta("en"),
-    mdEntryNoMarkdown: "No Markdown files found in this folder",
-    mdEntryPermissionDenied: "Folder access was not granted"
-  },
-  ko: {
-    heroTitleLine1: "더 빠르게 번역하고",
-    heroTitleLine2: "더 깊게 이해하세요",
-    heroTitleLine3: "月の言葉",
-    heroDesc: "몰입형 다크 디자인으로 만든 언어 학습용 데스크톱 번역 앱입니다",
-    ctaPrimary: "무료로 시작",
-    ctaSecondary: "기능 보기",
-    sectionFeatureTitle: "흐름을 끊지 않는 번역 운영",
-    f1Title: "원클릭 호출, 말하면 즉시 번역",
-    f1Desc: "빠르게 실행하고 바로 번역해 작업 흐름을 끊지 않습니다",
-    f2Title: "Tsuki CLI 로 앱 간 초고속 번역",
-    f2Desc: "Tsuki CLI 로 어떤 앱에서도 즉시 번역 화면으로 이동합니다",
-    f3Title: "어형, 발음, 뜻, 예문을 한 번에",
-    f3Desc: "핵심 어휘 정보를 한 화면에 모아 전환 비용을 줄였습니다",
-    f4Title: "예문 토큰 하이라이트 + 후리가나",
-    f4Desc: "문장 분해와 읽기 힌트를 함께 보여 더 직관적으로 읽을 수 있습니다",
-    f5Title: "Dark / Light 테마切换",
-    f5Desc: "환경에 맞춰 시각 모드를切り替えられます",
-    f6Title: "번역 자동 축적",
-    f6Desc: "당일 NOTE.md 와 스크린샷이 자동으로 정리됩니다",
-    resultTitle: "정답 번역 그 이상",
-    resultDesc: "문맥 기반 구조화 정보와 토큰 하이라이트로 핵심을 빠르게 파악합니다",
-    previewInput: "입력",
-    previewResult: "결과",
-    lastCtaTitle: "모든 번역을 학습으로 연결하세요",
-    lastCtaDesc: "月の言葉로 입력-이해-기억의 흐름을 만드세요",
-    lastCtaBtn: "지금 다운로드",
-    statusReady: "준비됨",
-    mdEntryHeading: getMdEntryHeading("ko"),
-    mdEntryTitle: "폴더를 여기에 드롭하세요",
-    mdEntrySub: getMdEntrySub("ko"),
-    mdEntryCta: getMdEntryCta("ko"),
-    mdEntryNoMarkdown: "이 폴더에 Markdown 파일이 없습니다"
-  },
-  es: {
-    heroTitleLine1: "Traduce mas rapido",
-    heroTitleLine2: "comprende mas profundo",
-    heroTitleLine3: "月の言葉",
-    heroDesc: "Con un lenguaje visual oscuro e inmersivo, creado para aprender idiomas",
-    ctaPrimary: "Probar gratis",
-    ctaSecondary: "Ver funciones",
-    sectionFeatureTitle: "Flujo continuo para traducir",
-    f1Title: "Invocacion con un clic y traduccion al hablar",
-    f1Desc: "Abre rapido y traduce sin romper tu flujo de trabajo",
-    f2Title: "Traduccion instantanea entre apps via Tsuki CLI",
-    f2Desc: "Entra desde cualquier app con Tsuki CLI",
-    f3Title: "Forma, pronunciacion, significado y ejemplos en una vista",
-    f3Desc: "Toda la informacion lexical clave en un solo lugar",
-    f4Title: "Resaltado por tokens + furigana en ejemplos",
-    f4Desc: "Lectura mas clara y comprension mas directa en frases largas",
-    f5Title: "Cambio libre entre temas Dark / Light",
-    f5Desc: "Ajusta la visualizacion al entorno",
-    f6Title: "Archivo automatico de traducciones",
-    f6Desc: "NOTE.md diario y capturas se guardan automaticamente",
-    resultTitle: "Mas que una traduccion correcta",
-    resultDesc: "Visualiza contexto estructurado y detecta partes clave con resaltado por tokens",
-    previewInput: "Entrada",
-    previewResult: "Resultado",
-    lastCtaTitle: "Convierte cada traduccion en aprendizaje",
-    lastCtaDesc: "Empieza con 月の言葉 hoy",
-    lastCtaBtn: "Descargar ahora",
-    statusReady: "Listo",
-    mdEntryHeading: getMdEntryHeading("es"),
-    mdEntryTitle: "Suelta tu carpeta aqui",
-    mdEntrySub: getMdEntrySub("es"),
-    mdEntryCta: getMdEntryCta("es"),
-    mdEntryNoMarkdown: "No se encontraron archivos Markdown en esta carpeta"
-  },
-  fr: {
-    heroTitleLine1: "Traduisez plus vite",
-    heroTitleLine2: "comprenez plus profondement",
-    heroTitleLine3: "月の言葉",
-    heroDesc: "Construit avec un langage visuel sombre et immersif, concu pour l'apprentissage des langues",
-    ctaPrimary: "Essayer gratuitement",
-    ctaSecondary: "Voir les fonctions",
-    sectionFeatureTitle: "Un flux de traduction sans rupture",
-    f1Title: "Invocation en un clic, parler puis traduire",
-    f1Desc: "Lancez rapidement et traduisez sans casser votre flux",
-    f2Title: "Traduction inter-apps instantanee via Tsuki CLI",
-    f2Desc: "Entree immediate depuis n'importe quelle app avec Tsuki CLI",
-    f3Title: "Lemme, prononciation, sens et exemples sur un ecran",
-    f3Desc: "Toutes les informations lexicales utiles dans la meme vue",
-    f4Title: "Surlignage token + furigana sur les exemples",
-    f4Desc: "Lecture plus directe et comprehension plus rapide des phrases longues",
-    f5Title: "Themes Dark / Light libres",
-    f5Desc: "Adaptez l'affichage a votre environnement",
-    f6Title: "Archivage automatique des traductions",
-    f6Desc: "NOTE.md du jour et captures sont ranges automatiquement",
-    resultTitle: "Plus qu'une traduction correcte",
-    resultDesc: "Informations lexicales structurees en contexte avec surlignage par token",
-    previewInput: "Entree",
-    previewResult: "Resultat",
-    lastCtaTitle: "Transformez chaque traduction en apprentissage",
-    lastCtaDesc: "Demarrez avec 月の言葉 des maintenant",
-    lastCtaBtn: "Telecharger",
-    statusReady: "Pret",
-    mdEntryHeading: getMdEntryHeading("fr"),
-    mdEntryTitle: "Deposez un dossier ici",
-    mdEntrySub: getMdEntrySub("fr"),
-    mdEntryCta: getMdEntryCta("fr"),
-    mdEntryNoMarkdown: "Aucun fichier Markdown trouve dans ce dossier"
-  },
-  de: {
-    heroTitleLine1: "Schneller ubersetzen",
-    heroTitleLine2: "tiefer verstehen",
-    heroTitleLine3: "月の言葉",
-    heroDesc: "Mit immersiver Dark-Designsprache entwickelt, fur Sprachlernen",
-    ctaPrimary: "Kostenlos testen",
-    ctaSecondary: "Funktionen ansehen",
-    sectionFeatureTitle: "Ubersetzungsfluss ohne Unterbrechung",
-    f1Title: "Ein Klick aufrufen, sprechen und sofort ubersetzen",
-    f1Desc: "Schnell starten und direkt ubersetzen ohne Kontextwechsel",
-    f2Title: "Tsuki CLI basierte Sofortubersetzung zwischen Apps",
-    f2Desc: "Mit Tsuki CLI aus jeder App direkt einspringen",
-    f3Title: "Wortform, Aussprache, Bedeutung, Beispiele in einer Ansicht",
-    f3Desc: "Alle wichtigen Lexiksignale kompakt auf einem Screen",
-    f4Title: "Token-Highlight + Furigana in Beispielsatzen",
-    f4Desc: "Klarere Lesefuhrung und schnelleres Verstehen langer Satze",
-    f5Title: "Dark / Light Themen wechseln",
-    f5Desc: "Darstellung an Umgebung anpassen",
-    f6Title: "Automatische Ubersetzungsablage",
-    f6Desc: "Tagliches NOTE.md und Screenshots werden automatisch archiviert",
-    resultTitle: "Mehr als nur korrekt ubersetzt",
-    resultDesc: "Strukturierte Wortinformationen im Kontext mit Token-Highlighting",
-    previewInput: "Eingabe",
-    previewResult: "Ergebnis",
-    lastCtaTitle: "Mach aus jeder Ubersetzung Lernen",
-    lastCtaDesc: "Starte jetzt mit 月の言葉",
-    lastCtaBtn: "Jetzt herunterladen",
-    statusReady: "Bereit",
-    mdEntryHeading: getMdEntryHeading("de"),
-    mdEntryTitle: "Ordner hier ablegen",
-    mdEntrySub: getMdEntrySub("de"),
-    mdEntryCta: getMdEntryCta("de"),
-    mdEntryNoMarkdown: "In diesem Ordner wurden keine Markdown-Dateien gefunden"
-  },
-  ru: {
-    heroTitleLine1: "Perevodite bystree",
-    heroTitleLine2: "ponimaite glubzhe",
-    heroTitleLine3: "月の言葉",
-    heroDesc: "Sdelano v immersivnom temnom stile dlia izucheniia iazykov",
-    ctaPrimary: "Poprobovat besplatno",
-    ctaSecondary: "Smotret funktsii",
-    sectionFeatureTitle: "Nepreyrvnyi perevodcheskii potok",
-    f1Title: "Odin klik, skazali i srazu perevod",
-    f1Desc: "Bystryi zapusk i perevod bez razryva rabochego potoka",
-    f2Title: "Mgnovennyi mezhprilozhencheskii perevod cherez Tsuki CLI",
-    f2Desc: "Vkhod v perevod iz liubogo prilozheniia po Tsuki CLI",
-    f3Title: "Forma, proiznoshenie, znachenie i primery v odnom vide",
-    f3Desc: "Vazhnaia leksicheskaia informatsiia sobrana na odnom ekrane",
-    f4Title: "Podsvetka tokenov + furigana v primerakh",
-    f4Desc: "Chtenie stanovitsia poniatnee, dlinnye frazy vosprinimaiutsia legche",
-    f5Title: "Perekliuchenie mezhdu Dark / Light",
-    f5Desc: "Vybirajte temu po obstanovke",
-    f6Title: "Avtomaticheskoe nakoplenie perevodov",
-    f6Desc: "Dnevnoi NOTE.md i skrinhoty sokhraniaiutsia avtomaticheski",
-    resultTitle: "Bolshe, chem prosto pravilnyi perevod",
-    resultDesc: "Strukturirovannaia leksika v kontekste i bystryi fokus cherez podsvetku tokenov",
-    previewInput: "Vvod",
-    previewResult: "Rezultat",
-    lastCtaTitle: "Prevratite kazhdyi perevod v obuchenie",
-    lastCtaDesc: "Nachnite s 月の言葉 uzhe seichas",
-    lastCtaBtn: "Skachat",
-    statusReady: "Gotovo",
-    mdEntryHeading: getMdEntryHeading("ru"),
-    mdEntryTitle: "Peretashchite papku siuda",
-    mdEntrySub: getMdEntrySub("ru"),
-    mdEntryCta: getMdEntryCta("ru"),
-    mdEntryNoMarkdown: "V etoi papke net failov Markdown"
-  }
-};
+const FALLBACK_LANDING_PACK = getFallbackLandingPack();
 
 const RELEASE_URL = "https://github.com/tt1k/tsuki/releases";
 const LANGUAGE_COOKIE_KEY = "tsuki_lang";
@@ -538,6 +170,10 @@ function App() {
   const [noMarkdownModalOpen, setNoMarkdownModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
 
+  const preloadMdViewerPage = useCallback(() => {
+    void import("./MdViewerPage");
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
@@ -552,29 +188,58 @@ function App() {
   }, []);
 
   const navigateToMd = useCallback((initialEntries = []) => {
+    preloadMdViewerPage();
     if (typeof window !== "undefined" && window.location.pathname !== "/md") {
       window.history.pushState(null, "", "/md");
     }
     setMdInitialEntries(initialEntries);
     setPathname("/md");
-  }, []);
+  }, [preloadMdViewerPage]);
 
   const [language, setLanguage] = useState(() => {
     const savedLanguage = readLanguageFromCookie();
     return LANGUAGES.some((item) => item.code === savedLanguage) ? savedLanguage : "ja";
   });
+  const [landingPack, setLandingPack] = useState(() => FALLBACK_LANDING_PACK);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadLandingLanguagePack(language).then((nextPack) => {
+      if (!cancelled) {
+        setLandingPack(nextPack);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
+
   const onLanguageChange = useCallback((nextLanguage) => {
     setLanguage(nextLanguage);
     persistLanguageToCookie(nextLanguage);
+    preloadLandingLanguagePack(nextLanguage);
   }, []);
-  const t = useMemo(() => COPY[language] ?? COPY.ja, [language]);
-  const modalCopy = useMemo(() => MODAL_COPY[language] ?? MODAL_COPY.ja, [language]);
+  const t = useMemo(
+    () => ({
+      ...(landingPack?.landing ?? FALLBACK_LANDING_PACK.landing),
+      mdEntryHeading: getMdEntryHeading(language),
+      mdEntrySub: getMdEntrySub(language),
+      mdEntryCta: getMdEntryCta(language)
+    }),
+    [language, landingPack]
+  );
+  const modalCopy = useMemo(
+    () => landingPack?.modal ?? FALLBACK_LANDING_PACK.modal,
+    [landingPack]
+  );
   const productName = useMemo(() => PRODUCT_NAMES[language] ?? PRODUCT_NAMES.ja, [language]);
   const productImage = useMemo(() => PRODUCT_IMAGES[language] ?? PRODUCT_IMAGES.ja, [language]);
   const markdownImage = useMemo(() => MARKDOWN_IMAGES[language] ?? MARKDOWN_IMAGES.ja, [language]);
   const markdownPreviewCopy = useMemo(
-    () => MARKDOWN_PREVIEW_COPY[language] ?? MARKDOWN_PREVIEW_COPY.en,
-    [language]
+    () => landingPack?.markdownPreview ?? FALLBACK_LANDING_PACK.markdownPreview,
+    [landingPack]
   );
   const closeNoMarkdownModal = useCallback(() => {
     setNoMarkdownModalOpen(false);
@@ -609,6 +274,8 @@ function App() {
   }, [noMarkdownModalOpen]);
 
   const openFolderPicker = useCallback(async () => {
+    preloadMdViewerPage();
+
     if (typeof window !== "undefined" && typeof window.showDirectoryPicker === "function") {
       try {
         const directoryHandle = await window.showDirectoryPicker({ mode: "read" });
@@ -621,14 +288,12 @@ function App() {
           }
         }
 
-        const containsMarkdown = await directoryContainsMarkdown(directoryHandle);
-
-        if (!containsMarkdown) {
+        const entries = await collectFilesFromDirectoryHandle(directoryHandle);
+        if (!hasMarkdownEntries(entries)) {
           notifyNoMarkdown();
           return;
         }
 
-        const entries = await collectFilesFromDirectoryHandle(directoryHandle);
         navigateToMd(entries);
         return;
       } catch (error) {
@@ -646,10 +311,12 @@ function App() {
     }
 
     folderInputRef.current?.click();
-  }, [navigateToMd, notifyNoMarkdown, notifyPermissionDenied]);
+  }, [navigateToMd, notifyNoMarkdown, notifyPermissionDenied, preloadMdViewerPage]);
 
   const onFolderInputChange = useCallback(
     (event) => {
+      preloadMdViewerPage();
+
       const files = Array.from(event.target.files ?? []);
 
       if (!files.length) {
@@ -671,19 +338,63 @@ function App() {
       navigateToMd(entries);
       event.target.value = "";
     },
-    [navigateToMd, notifyNoMarkdown]
+    [navigateToMd, notifyNoMarkdown, preloadMdViewerPage]
   );
-  const featureItems = [
-    { title: t.f1Title, desc: t.f1Desc },
-    { title: t.f2Title, desc: t.f2Desc },
-    { title: t.f3Title, desc: t.f3Desc },
-    { title: t.f4Title, desc: t.f4Desc },
-    { title: t.f5Title, desc: t.f5Desc },
-    { title: t.f6Title, desc: t.f6Desc }
-  ];
+  const onMdPanelKeyDown = useCallback(
+    (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openFolderPicker();
+      }
+    },
+    [openFolderPicker]
+  );
+  const onMdPanelDragOver = useCallback(
+    (event) => {
+      event.preventDefault();
+      setMdEntryDragging(true);
+      preloadMdViewerPage();
+    },
+    [preloadMdViewerPage]
+  );
+  const onMdPanelDragLeave = useCallback((event) => {
+    event.preventDefault();
+    setMdEntryDragging(false);
+  }, []);
+  const onMdPanelDrop = useCallback(
+    async (event) => {
+      event.preventDefault();
+      setMdEntryDragging(false);
+      preloadMdViewerPage();
+
+      try {
+        const droppedFiles = await collectFilesFromDataTransfer(event.dataTransfer);
+        if (!hasMarkdownEntries(droppedFiles)) {
+          notifyNoMarkdown();
+          return;
+        }
+        navigateToMd(droppedFiles);
+      } catch {
+        notifyNoMarkdown();
+      }
+    },
+    [navigateToMd, notifyNoMarkdown, preloadMdViewerPage]
+  );
+  const featureItems = useMemo(
+    () => [
+      { title: t.f1Title, desc: t.f1Desc },
+      { title: t.f2Title, desc: t.f2Desc },
+      { title: t.f3Title, desc: t.f3Desc },
+      { title: t.f4Title, desc: t.f4Desc },
+      { title: t.f5Title, desc: t.f5Desc },
+      { title: t.f6Title, desc: t.f6Desc }
+    ],
+    [t.f1Desc, t.f1Title, t.f2Desc, t.f2Title, t.f3Desc, t.f3Title, t.f4Desc, t.f4Title, t.f5Desc, t.f5Title, t.f6Desc, t.f6Title]
+  );
 
   if (pathname === "/md") {
     return (
+      <Suspense fallback={<main className="container"><section className="hero"><p>{t.statusReady}...</p></section></main>}>
         <MdViewerPage
           initialEntries={mdInitialEntries}
           onInitialEntriesConsumed={() => setMdInitialEntries([])}
@@ -692,6 +403,7 @@ function App() {
           languageOptions={LANGUAGES}
           productName={productName}
         />
+      </Suspense>
     );
   }
 
@@ -788,35 +500,10 @@ function App() {
             isDragging={mdEntryDragging}
             ariaLabel="拖入文件夹后进入 Markdown 渲染页面"
             onPanelClick={openFolderPicker}
-            onPanelKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                openFolderPicker();
-              }
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setMdEntryDragging(true);
-            }}
-            onDragLeave={(event) => {
-              event.preventDefault();
-              setMdEntryDragging(false);
-            }}
-            onDrop={async (event) => {
-              event.preventDefault();
-              setMdEntryDragging(false);
-
-              try {
-                const droppedFiles = await collectFilesFromDataTransfer(event.dataTransfer);
-                if (!hasMarkdownEntries(droppedFiles)) {
-                  notifyNoMarkdown();
-                  return;
-                }
-                navigateToMd(droppedFiles);
-              } catch {
-                notifyNoMarkdown();
-              }
-            }}
+            onPanelKeyDown={onMdPanelKeyDown}
+            onDragOver={onMdPanelDragOver}
+            onDragLeave={onMdPanelDragLeave}
+            onDrop={onMdPanelDrop}
             onCtaClick={openFolderPicker}
           />
           <div className="md-entry-preview" aria-label="markdown preview image">

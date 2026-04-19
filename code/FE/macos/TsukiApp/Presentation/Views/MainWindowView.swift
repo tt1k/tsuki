@@ -55,7 +55,7 @@ struct MainWindowView: View {
             viewModel.inputText = text
             viewModel.translate()
         }
-        .onChange(of: viewModel.isTranslating) { translating in
+        .onChangeCompat(of: viewModel.isTranslating) { translating in
             guard !translating, let result = viewModel.result else { return }
             saveOutputCardScreenshot(result: result)
         }

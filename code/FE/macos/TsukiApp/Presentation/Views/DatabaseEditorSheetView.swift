@@ -13,17 +13,7 @@ struct DatabaseEditorSheetView: View {
     @State private var searchText = ""
     @State private var isLoading = false
     @State private var isDeleting = false
-
-    private var filteredRecords: [SQLiteTranslationCacheStore.CachedRecord] {
-        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else { return records }
-
-        return records.filter { record in
-            record.queryText.localizedCaseInsensitiveContains(trimmedQuery)
-                || record.result.headwordKanji.localizedCaseInsensitiveContains(trimmedQuery)
-                || record.result.meaning.localizedCaseInsensitiveContains(trimmedQuery)
-        }
-    }
+    @State private var filteredRecords: [SQLiteTranslationCacheStore.CachedRecord] = []
 
     var body: some View {
         VStack(spacing: 12) {
@@ -95,6 +85,9 @@ struct DatabaseEditorSheetView: View {
         .background(DesignTokens.ColorToken.windowBG)
         .onAppear {
             reloadRecords()
+        }
+        .onChangeCompat(of: searchText) { _ in
+            updateFilteredRecords()
         }
     }
 
@@ -181,6 +174,7 @@ struct DatabaseEditorSheetView: View {
             await MainActor.run {
                 self.records = records
                 self.selectedRecordIDs = self.selectedRecordIDs.intersection(Set(records.map(\.id)))
+                updateFilteredRecords()
                 isLoading = false
             }
         }
@@ -242,10 +236,32 @@ struct DatabaseEditorSheetView: View {
             await MainActor.run {
                 self.records = records
                 selectedRecordIDs.subtract(recordIDs)
+                updateFilteredRecords()
                 isDeleting = false
                 onRecordsChanged()
             }
         }
+    }
+
+    private func updateFilteredRecords() {
+        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextRecords: [SQLiteTranslationCacheStore.CachedRecord]
+
+        if trimmedQuery.isEmpty {
+            nextRecords = records
+        } else {
+            nextRecords = records.filter { record in
+                record.queryText.localizedCaseInsensitiveContains(trimmedQuery)
+                    || record.result.headwordKanji.localizedCaseInsensitiveContains(trimmedQuery)
+                    || record.result.meaning.localizedCaseInsensitiveContains(trimmedQuery)
+            }
+        }
+
+        let hasSameOrderAndItems = filteredRecords.count == nextRecords.count
+            && zip(filteredRecords, nextRecords).allSatisfy { lhs, rhs in lhs.id == rhs.id }
+        guard !hasSameOrderAndItems else { return }
+
+        filteredRecords = nextRecords
     }
 
     private func copyRecordRow(_ record: SQLiteTranslationCacheStore.CachedRecord) {

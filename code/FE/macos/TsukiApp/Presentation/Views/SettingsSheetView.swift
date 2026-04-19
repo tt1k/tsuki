@@ -116,19 +116,19 @@ struct SettingsSheetView: View {
             }
             refreshDatabaseInfo()
         }
-        .onChange(of: settingsStore.provider) { _ in
+        .onChangeCompat(of: settingsStore.provider) { _ in
             endAPIKeyEditing()
             refreshAPIKeyInput()
             if hasInitializedLogs {
                 AppEventLogger.log("Settings changed: provider=\(settingsStore.provider)")
             }
         }
-        .onChange(of: settingsStore.language) { _ in
+        .onChangeCompat(of: settingsStore.language) { _ in
             if hasInitializedLogs {
                 AppEventLogger.log("Settings changed: language=\(settingsStore.language)")
             }
         }
-        .onChange(of: settingsStore.appearanceMode) { _ in
+        .onChangeCompat(of: settingsStore.appearanceMode) { _ in
             (NSApp.delegate as? AppDelegate)?.applyAppearanceMode(
                 settingsStore.appearanceMode,
                 windowGlassOpacity: settingsStore.windowGlassOpacity
@@ -137,7 +137,7 @@ struct SettingsSheetView: View {
                 AppEventLogger.log("Settings changed: appearanceMode=\(settingsStore.appearanceMode.rawValue)")
             }
         }
-        .onChange(of: settingsStore.windowGlassOpacity) { _ in
+        .onChangeCompat(of: settingsStore.windowGlassOpacity) { _ in
             (NSApp.delegate as? AppDelegate)?.applyAppearanceMode(
                 settingsStore.appearanceMode,
                 windowGlassOpacity: settingsStore.windowGlassOpacity
@@ -147,7 +147,7 @@ struct SettingsSheetView: View {
                 AppEventLogger.log("Settings changed: windowGlassOpacity=\(settingsStore.windowGlassOpacity)")
             }
         }
-        .onChange(of: settingsStore.dockIconVisible) { _ in
+        .onChangeCompat(of: settingsStore.dockIconVisible) { _ in
             if hasInitializedLogs {
                 AppEventLogger.log("Settings changed: dockIconVisible=\(settingsStore.dockIconVisible)")
             }
@@ -156,7 +156,7 @@ struct SettingsSheetView: View {
                 (NSApp.delegate as? AppDelegate)?.applyDockIconVisibility(true)
             }
         }
-        .onChange(of: selectedTab) { _ in
+        .onChangeCompat(of: selectedTab) { _ in
             endAPIKeyEditing()
             if hasInitializedLogs {
                 AppEventLogger.log("Settings changed: selectedTab=\(selectedTab.rawValue)")
@@ -165,7 +165,7 @@ struct SettingsSheetView: View {
                 refreshDatabaseInfo()
             }
         }
-        .onChange(of: apiKeyEditorFocused) { isFocused in
+        .onChangeCompat(of: apiKeyEditorFocused) { isFocused in
             if !isFocused {
                 endAPIKeyEditing()
             }
@@ -281,224 +281,135 @@ struct SettingsSheetView: View {
     private var contentPanel: some View {
         switch selectedTab {
         case .general:
-            VStack(spacing: 10) {
-                    HStack {
-                        Text(localizedText(en: "Language", zhCN: "语言", zhTW: "語言", ja: "言語"))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                        Spacer()
-
-                        Picker("Language", selection: $settingsStore.language) {
-                            ForEach(LanguageOption.allCases, id: \.rawValue) { option in
-                                Text(languageTitle(option)).tag(option.rawValue)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 120)
-                        .tint(DesignTokens.ColorToken.textMain)
-                    }
-
-                    HStack {
-                        Text(localizedText(en: "Provider", zhCN: "模型", zhTW: "模型", ja: "モデル"))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                        Spacer()
-
-                        Picker("Provider", selection: $settingsStore.provider) {
-                            ForEach(ProviderOption.allCases, id: \.rawValue) { option in
-                                Text(option.rawValue).tag(option.rawValue)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 120)
-                        .tint(DesignTokens.ColorToken.textMain)
-                    }
-
-                    HStack {
-                        Text(localizedText(en: "API Key", zhCN: "API Key", zhTW: "API Key", ja: "API キー"))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                        Spacer()
-
-                        if isEditingAPIKey {
-                            TextField(localizedText(en: "Enter API key", zhCN: "输入 API Key", zhTW: "輸入 API Key", ja: "API キーを入力"), text: $apiKeyInput)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                                .foregroundStyle(DesignTokens.ColorToken.textMain)
-                                .padding(.horizontal, 10)
-                                .frame(width: 260, height: 24)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(apiKeyFieldBackgroundColor)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .stroke(DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity), lineWidth: 0.8)
-                                )
-                                .focused($apiKeyEditorFocused)
-                                .onSubmit {
-                                    endAPIKeyEditing()
-                                }
-                        } else {
-                            Button {
-                                beginAPIKeyEditing()
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Text(apiKeyInput.isEmpty ? localizedText(en: "Click to enter API key", zhCN: "点击输入 API Key", zhTW: "點擊輸入 API Key", ja: "クリックして API キーを入力") : apiKeyInput)
-                                        .lineLimit(1)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    Image(systemName: "pencil")
-                                }
-                                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                                .foregroundStyle(DesignTokens.ColorToken.textMain)
-                                .padding(.horizontal, 10)
-                                .frame(width: 260, height: 24)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(
-                                            isAPIKeyButtonHovered
-                                                ? DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
-                                                : apiKeyFieldBackgroundColor
-                                        )
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .stroke(
-                                            isAPIKeyButtonHovered
-                                                ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
-                                                : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
-                                            lineWidth: 0.8
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .simultaneousGesture(
-                                TapGesture(count: 2).onEnded {
-                                    beginAPIKeyEditing()
-                                }
-                            )
-                            .onHover { isHovered in
-                                isAPIKeyButtonHovered = isHovered
-                            }
-                        }
-                    }
-
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(localizedText(en: "Note Path", zhCN: "笔记路径", zhTW: "筆記路徑", ja: "ノートパス"))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                        Spacer()
-
-                        if let noteDirectoryPath {
-                            Button {
-                                openNoteDirectoryInFinder()
-                            } label: {
-                                Text(noteDirectoryPath)
-                                    .font(.system(size: 12, weight: .regular, design: .monospaced))
-                                    .foregroundStyle(isNotePathButtonHovered ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .frame(width: 260, alignment: .trailing)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                            .fill(
-                                                isNotePathButtonHovered
-                                                    ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
-                                                    : .clear
-                                            )
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .onHover { isHovered in
-                                isNotePathButtonHovered = isHovered
-                            }
-                            .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
-                        } else {
-                            Text(notePathText)
-                                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                                .foregroundStyle(DesignTokens.ColorToken.textMain)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .frame(width: 260, alignment: .trailing)
-                        }
-                    }
-                }
+            generalTabContent
         case .appearance:
-            VStack(spacing: 10) {
-                HStack {
-                    Text(localizedText(en: "App Theme", zhCN: "应用主题", zhTW: "應用主題", ja: "アプリテーマ"))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                    Spacer()
-
-                    Picker("Theme", selection: $settingsStore.appearanceMode) {
-                        ForEach(AppearanceMode.allCases, id: \.rawValue) { option in
-                            Text(appearanceModeTitle(option)).tag(option)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: 120)
-                    .tint(DesignTokens.ColorToken.textMain)
-                }
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text(opacityTitle)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                    Spacer()
-
-                    HStack(spacing: 3) {
-                        Slider(value: $settingsStore.windowGlassOpacity, in: 0.70 ... 1.00, step: 0.01)
-                            .frame(width: 112)
-                            .tint(DesignTokens.ColorToken.textDim)
-
-                        Text(windowOpacityText)
-                            .font(.system(size: 12, weight: .regular, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textMain)
-                            .frame(width: 40, alignment: .trailing)
-                    }
-                    .frame(width: 160, alignment: .trailing)
-                }
-            }
+            appearanceTabContent
         case .database:
-            VStack(spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(localizedText(en: "Entry Count", zhCN: "词库数量", zhTW: "詞庫數量", ja: "語彙数"))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
+            databaseTabContent
+        case .shortcuts:
+            shortcutsTabContent
+        case .about:
+            aboutTabContent
+        }
+    }
 
-                    Spacer()
+    private var generalTabContent: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text(localizedText(en: "Language", zhCN: "语言", zhTW: "語言", ja: "言語"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
 
-                    Text("\(databaseEntryCount)")
+                Spacer()
+
+                Picker("Language", selection: $settingsStore.language) {
+                    ForEach(LanguageOption.allCases, id: \.rawValue) { option in
+                        Text(languageTitle(option)).tag(option.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 120)
+                .tint(DesignTokens.ColorToken.textMain)
+            }
+
+            HStack {
+                Text(localizedText(en: "Provider", zhCN: "模型", zhTW: "模型", ja: "モデル"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Picker("Provider", selection: $settingsStore.provider) {
+                    ForEach(ProviderOption.allCases, id: \.rawValue) { option in
+                        Text(option.rawValue).tag(option.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 120)
+                .tint(DesignTokens.ColorToken.textMain)
+            }
+
+            HStack {
+                Text(localizedText(en: "API Key", zhCN: "API Key", zhTW: "API Key", ja: "API キー"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                if isEditingAPIKey {
+                    TextField(localizedText(en: "Enter API key", zhCN: "输入 API Key", zhTW: "輸入 API Key", ja: "API キーを入力"), text: $apiKeyInput)
+                        .textFieldStyle(.plain)
                         .font(.system(size: 12, weight: .regular, design: .monospaced))
                         .foregroundStyle(DesignTokens.ColorToken.textMain)
-                        .frame(width: 260, alignment: .trailing)
-                }
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text(localizedText(en: "DB Path", zhCN: "数据库路径", zhTW: "資料庫路徑", ja: "DB パス"))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                    Spacer()
-
+                        .padding(.horizontal, 10)
+                        .frame(width: 260, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(apiKeyFieldBackgroundColor)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity), lineWidth: 0.8)
+                        )
+                        .focused($apiKeyEditorFocused)
+                        .onSubmit {
+                            endAPIKeyEditing()
+                        }
+                } else {
                     Button {
-                        openDatabaseInFinder()
+                        beginAPIKeyEditing()
                     } label: {
-                        Text(cacheStore.databasePath)
+                        HStack(spacing: 8) {
+                            Text(apiKeyInput.isEmpty ? localizedText(en: "Click to enter API key", zhCN: "点击输入 API Key", zhTW: "點擊輸入 API Key", ja: "クリックして API キーを入力") : apiKeyInput)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "pencil")
+                        }
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textMain)
+                        .padding(.horizontal, 10)
+                        .frame(width: 260, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    isAPIKeyButtonHovered
+                                        ? DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                                        : apiKeyFieldBackgroundColor
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(
+                                    isAPIKeyButtonHovered
+                                        ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                        : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                    lineWidth: 0.8
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isHovered in
+                        isAPIKeyButtonHovered = isHovered
+                    }
+                }
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "Note Path", zhCN: "笔记路径", zhTW: "筆記路徑", ja: "ノートパス"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                if let noteDirectoryPath {
+                    Button {
+                        openNoteDirectoryInFinder()
+                    } label: {
+                        Text(noteDirectoryPath)
                             .font(.system(size: 12, weight: .regular, design: .monospaced))
-                            .foregroundStyle(isDatabasePathButtonHovered ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
+                            .foregroundStyle(isNotePathButtonHovered ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .padding(.horizontal, 8)
@@ -507,7 +418,7 @@ struct SettingsSheetView: View {
                             .background(
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     .fill(
-                                        isDatabasePathButtonHovered
+                                        isNotePathButtonHovered
                                             ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
                                             : .clear
                                     )
@@ -515,179 +426,282 @@ struct SettingsSheetView: View {
                     }
                     .buttonStyle(.plain)
                     .onHover { isHovered in
-                        isDatabasePathButtonHovered = isHovered
+                        isNotePathButtonHovered = isHovered
                     }
                     .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
-                }
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text(localizedText(en: "Export Notes", zhCN: "导出笔记", zhTW: "匯出筆記", ja: "ノートを書き出す"))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                    Spacer()
-
-                    Button {
-                        startDatabaseExport()
-                    } label: {
-                        Text(
-                            isExportingDatabase
-                                ? localizedText(en: "Exporting...", zhCN: "导出中...", zhTW: "匯出中...", ja: "書き出し中...")
-                                : localizedText(en: "Export", zhCN: "导出", zhTW: "匯出", ja: "書き出す")
-                        )
-                        .font(.system(size: 13, weight: .regular, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textMain)
-                        .frame(width: 120, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(
-                                    isExportButtonHovered
-                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
-                                        : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
-                                )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(
-                                    isExportButtonHovered
-                                        ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
-                                        : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
-                                    lineWidth: 0.8
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isHovered in
-                        isExportButtonHovered = isHovered
-                    }
-                    .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
-                }
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text(localizedText(en: "Clear Cache", zhCN: "清空缓存", zhTW: "清空快取", ja: "キャッシュを消去"))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                    Spacer()
-
-                    Button {
-                        confirmAndClearDatabaseCache()
-                    } label: {
-                        Text(
-                            isClearingDatabase
-                                ? localizedText(en: "Clearing...", zhCN: "清空中...", zhTW: "清空中...", ja: "消去中...")
-                                : localizedText(en: "Clear", zhCN: "清空", zhTW: "清空", ja: "消去")
-                        )
-                        .font(.system(size: 13, weight: .regular, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textMain)
-                        .frame(width: 120, height: 24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(
-                                    isClearButtonHovered
-                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
-                                        : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
-                                )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(
-                                    isClearButtonHovered
-                                        ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
-                                        : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
-                                    lineWidth: 0.8
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isHovered in
-                        isClearButtonHovered = isHovered
-                    }
-                    .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
-                }
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text(localizedText(en: "Edit Records", zhCN: "编辑记录", zhTW: "編輯記錄", ja: "レコード編集"))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                    Spacer()
-
-                    Button {
-                        AppEventLogger.log("Database editor opened")
-                        isShowingDatabaseEditor = true
-                    } label: {
-                        Text(localizedText(en: "Edit", zhCN: "编辑", zhTW: "編輯", ja: "編集"))
-                            .font(.system(size: 13, weight: .regular, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textMain)
-                            .frame(width: 120, height: 24)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(
-                                        isEditButtonHovered
-                                            ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
-                                            : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
-                                    )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .stroke(
-                                        isEditButtonHovered
-                                            ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
-                                            : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
-                                        lineWidth: 0.8
-                                    )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isHovered in
-                        isEditButtonHovered = isHovered
-                    }
-                    .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
-                }
-
-            }
-        case .shortcuts:
-            VStack(spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(localizedText(en: "Translate", zhCN: "翻译", zhTW: "翻譯", ja: "翻訳"))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                    Spacer()
-
-                    Text("Enter / Cmd+Enter")
+                } else {
+                    Text(notePathText)
                         .font(.system(size: 12, weight: .regular, design: .monospaced))
                         .foregroundStyle(DesignTokens.ColorToken.textMain)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(width: 260, alignment: .trailing)
                 }
+            }
+        }
+    }
 
-                    HStack {
-                        Text(localizedText(en: "Show Dock icon", zhCN: "显示 Dock 图标", zhTW: "顯示 Dock 圖示", ja: "Dock アイコンを表示"))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
+    private var appearanceTabContent: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text(localizedText(en: "App Theme", zhCN: "应用主题", zhTW: "應用主題", ja: "アプリテーマ"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
 
-                        Spacer()
+                Spacer()
 
-                        Toggle("", isOn: $settingsStore.dockIconVisible)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .tint(DesignTokens.ColorToken.textDim)
+                Picker("Theme", selection: $settingsStore.appearanceMode) {
+                    ForEach(AppearanceMode.allCases, id: \.rawValue) { option in
+                        Text(appearanceModeTitle(option)).tag(option)
                     }
                 }
-        case .about:
-            VStack(spacing: 10) {
-                    infoRow(title: localizedText(en: "App", zhCN: "应用", zhTW: "應用", ja: "アプリ"), value: appDisplayName)
-                    infoRow(title: localizedText(en: "Version", zhCN: "版本", zhTW: "版本", ja: "バージョン"), value: appVersion)
-                    HStack {
-                        Text(localizedText(en: "Connect", zhCN: "联系", zhTW: "聯絡", ja: "連絡"))
-                            .font(.system(size: 12, weight: .regular, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textDim)
-                        Spacer()
-                        Link("github/tt1k", destination: URL(string: "https://github.com/tt1k")!)
-                            .font(.system(size: 12, weight: .regular, design: .monospaced))
-                            .foregroundStyle(DesignTokens.ColorToken.textMain)
-                    }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 120)
+                .tint(DesignTokens.ColorToken.textMain)
+            }
+
+            HStack {
+                Text(localizedText(en: "Show Dock icon", zhCN: "显示 Dock 图标", zhTW: "顯示 Dock 圖示", ja: "Dock アイコンを表示"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Toggle("", isOn: $settingsStore.dockIconVisible)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(DesignTokens.ColorToken.textDim)
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(opacityTitle)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                HStack(spacing: 3) {
+                    Slider(value: $settingsStore.windowGlassOpacity, in: 0.70 ... 1.00, step: 0.01)
+                        .frame(width: 112)
+                        .tint(DesignTokens.ColorToken.textDim)
+
+                    Text(windowOpacityText)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textMain)
+                        .frame(width: 40, alignment: .trailing)
                 }
+                .frame(width: 160, alignment: .trailing)
+            }
+        }
+    }
+
+    private var databaseTabContent: some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "Entry Count", zhCN: "词库数量", zhTW: "詞庫數量", ja: "語彙数"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Text("\(databaseEntryCount)")
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textMain)
+                    .frame(width: 260, alignment: .trailing)
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "DB Path", zhCN: "数据库路径", zhTW: "資料庫路徑", ja: "DB パス"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Button {
+                    openDatabaseInFinder()
+                } label: {
+                    Text(cacheStore.databasePath)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundStyle(isDatabasePathButtonHovered ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(width: 260, alignment: .trailing)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    isDatabasePathButtonHovered
+                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                        : .clear
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered in
+                    isDatabasePathButtonHovered = isHovered
+                }
+                .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "Export Notes", zhCN: "导出笔记", zhTW: "匯出筆記", ja: "ノートを書き出す"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Button {
+                    startDatabaseExport()
+                } label: {
+                    Text(
+                        isExportingDatabase
+                            ? localizedText(en: "Exporting...", zhCN: "导出中...", zhTW: "匯出中...", ja: "書き出し中...")
+                            : localizedText(en: "Export", zhCN: "导出", zhTW: "匯出", ja: "書き出す")
+                    )
+                    .font(.system(size: 13, weight: .regular, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textMain)
+                    .frame(width: 120, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(
+                                isExportButtonHovered
+                                    ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                    : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(
+                                isExportButtonHovered
+                                    ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                    : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                lineWidth: 0.8
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered in
+                    isExportButtonHovered = isHovered
+                }
+                .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "Clear Cache", zhCN: "清空缓存", zhTW: "清空快取", ja: "キャッシュを消去"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Button {
+                    confirmAndClearDatabaseCache()
+                } label: {
+                    Text(
+                        isClearingDatabase
+                            ? localizedText(en: "Clearing...", zhCN: "清空中...", zhTW: "清空中...", ja: "消去中...")
+                            : localizedText(en: "Clear", zhCN: "清空", zhTW: "清空", ja: "消去")
+                    )
+                    .font(.system(size: 13, weight: .regular, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textMain)
+                    .frame(width: 120, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(
+                                isClearButtonHovered
+                                    ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                    : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(
+                                isClearButtonHovered
+                                    ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                    : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                lineWidth: 0.8
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered in
+                    isClearButtonHovered = isHovered
+                }
+                .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "Edit Records", zhCN: "编辑记录", zhTW: "編輯記錄", ja: "レコード編集"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Button {
+                    AppEventLogger.log("Database editor opened")
+                    isShowingDatabaseEditor = true
+                } label: {
+                    Text(localizedText(en: "Edit", zhCN: "编辑", zhTW: "編輯", ja: "編集"))
+                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textMain)
+                        .frame(width: 120, height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    isEditButtonHovered
+                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                        : DesignTokens.ColorToken.boxHover(opacity: settingsStore.windowGlassOpacity)
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(
+                                    isEditButtonHovered
+                                        ? DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+                                        : DesignTokens.ColorToken.borderIdle(opacity: settingsStore.windowGlassOpacity),
+                                    lineWidth: 0.8
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered in
+                    isEditButtonHovered = isHovered
+                }
+                .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
+            }
+        }
+    }
+
+    private var shortcutsTabContent: some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "Translate", zhCN: "翻译", zhTW: "翻譯", ja: "翻訳"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Text("Enter / Cmd+Enter")
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textMain)
+            }
+        }
+    }
+
+    private var aboutTabContent: some View {
+        VStack(spacing: 10) {
+            infoRow(title: localizedText(en: "App", zhCN: "应用", zhTW: "應用", ja: "アプリ"), value: appDisplayName)
+            infoRow(title: localizedText(en: "Version", zhCN: "版本", zhTW: "版本", ja: "バージョン"), value: appVersion)
+            HStack {
+                Text(localizedText(en: "Connect", zhCN: "联系", zhTW: "聯絡", ja: "連絡"))
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+                Spacer()
+                Link("github/tt1k", destination: URL(string: "https://github.com/tt1k")!)
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textMain)
+            }
         }
     }
 

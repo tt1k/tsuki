@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
 import MdEntryPanel from "./MdEntryPanel";
 import { getMdEntryCta, getMdEntryHeading, getMdEntrySub } from "./md-entry-copy";
 import { collectFilesFromDataTransfer } from "./md-drop-utils";
@@ -9,6 +8,7 @@ import "./md-viewer.css";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"]);
 const RELEASE_URL = "https://github.com/tt1k/tsuki/releases";
+const RAW_HTML_TAG_PATTERN = /<([a-z][\w-]*)(\s[^>]*)?>/i;
 
 const UI_COPY = {
   ja: {
@@ -581,6 +581,189 @@ function stripFirstMarkdownTitle(markdown = "") {
   return lines.join("\n");
 }
 
+function hasRawHtmlTag(markdown = "") {
+  return RAW_HTML_TAG_PATTERN.test(markdown);
+}
+
+const MarkdownDocument = memo(function MarkdownDocument({
+  layoutModeKey,
+  splitContent,
+  printableMarkdown,
+  renderers,
+  rehypePlugins
+}) {
+  if (layoutModeKey === "double" && splitContent.sections.length > 1) {
+    return (
+      <>
+        {splitContent.lead ? (
+          <div className="md-double-intro">
+            <ReactMarkdown rehypePlugins={rehypePlugins} components={renderers}>
+              {splitContent.lead}
+            </ReactMarkdown>
+          </div>
+        ) : null}
+        <div className="md-double-grid">
+          {splitContent.sections.map((section, index) => (
+            <section className="md-double-item" key={`${index}-${section.slice(0, 24)}`}>
+              <ReactMarkdown rehypePlugins={rehypePlugins} components={renderers}>
+                {section}
+              </ReactMarkdown>
+            </section>
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <ReactMarkdown rehypePlugins={rehypePlugins} components={renderers}>
+      {printableMarkdown}
+    </ReactMarkdown>
+  );
+});
+
+const MdFilePicker = memo(function MdFilePicker({ mdFiles, selectedMdPath, onSelectMdFile }) {
+  if (mdFiles.length <= 1) {
+    return null;
+  }
+
+  return (
+    <section className="md-picker">
+      <div className="md-picker-list">
+        {mdFiles.map((item) => (
+          <button
+            type="button"
+            key={item.pathKey}
+            className={selectedMdPath === item.pathKey ? "is-selected" : ""}
+            onClick={() => onSelectMdFile(item.pathKey)}
+          >
+            {item.path}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+});
+
+const MdControls = memo(function MdControls({
+  t,
+  headingScaleKey,
+  imageWidthKey,
+  imageAlignKey,
+  layoutModeKey,
+  themeModeKey,
+  imageWidthOptions,
+  onHeadingScaleChange,
+  onImageWidthChange,
+  onImageAlignChange,
+  onLayoutChange,
+  onThemeChange,
+  onReset,
+  onExportPdf,
+  canExport
+}) {
+  return (
+    <section className="md-controls" aria-label="markdown display controls">
+      <div className="md-controls-group">
+        <span>{t.controlHeadingSize}</span>
+        <select
+          className="md-controls-select"
+          value={headingScaleKey}
+          onChange={onHeadingScaleChange}
+          aria-label={t.controlHeadingSize}
+        >
+          {HEADING_SCALE_OPTIONS.map((item) => (
+            <option value={item.key} key={item.key}>
+              {item.key === "small"
+                ? t.controlSizeSmall
+                : item.key === "medium"
+                  ? t.controlSizeMedium
+                  : t.controlSizeLarge}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="md-controls-group md-controls-group-image">
+        <span>{t.controlImageWidth}</span>
+        <select
+          className="md-controls-select"
+          value={imageWidthKey}
+          onChange={onImageWidthChange}
+          aria-label={t.controlImageWidth}
+        >
+          {imageWidthOptions.map((item) => (
+            <option value={item.key} key={item.key}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="md-controls-group">
+        <span>{t.controlImageAlign}</span>
+        <select
+          className="md-controls-select"
+          value={imageAlignKey}
+          onChange={onImageAlignChange}
+          aria-label={t.controlImageAlign}
+        >
+          {IMAGE_ALIGN_OPTIONS.map((item) => (
+            <option value={item.key} key={item.key}>
+              {item.key === "left"
+                ? t.controlAlignLeft
+                : item.key === "center"
+                  ? t.controlAlignCenter
+                  : t.controlAlignRight}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="md-controls-group">
+        <span>{t.controlLayout}</span>
+        <select
+          className="md-controls-select"
+          value={layoutModeKey}
+          onChange={onLayoutChange}
+          aria-label={t.controlLayout}
+        >
+          {LAYOUT_OPTIONS.map((item) => (
+            <option value={item.key} key={item.key}>
+              {item.key === "single" ? t.controlLayoutSingle : t.controlLayoutDouble}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="md-controls-group">
+        <span>{t.controlTheme}</span>
+        <select
+          className="md-controls-select"
+          value={themeModeKey}
+          onChange={onThemeChange}
+          aria-label={t.controlTheme}
+        >
+          {THEME_OPTIONS.map((item) => (
+            <option value={item.key} key={item.key}>
+              {item.key === "light" ? t.themeLight : t.themeDark}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="md-controls-action">
+        <button type="button" className="md-controls-reset" onClick={onReset}>
+          {t.resetConfig ?? "Reset"}
+        </button>
+        <button type="button" onClick={onExportPdf} disabled={!canExport}>
+          {t.exportPdf}
+        </button>
+      </div>
+    </section>
+  );
+});
+
 function MdViewerPage({
   initialEntries = [],
   onInitialEntriesConsumed,
@@ -615,6 +798,7 @@ function MdViewerPage({
   const [themeMode, setThemeMode] = useState(() => pickOption(THEME_OPTIONS, readLocalStorageValue(STORAGE_KEYS.theme), "dark"));
   const [pdfHintModalOpen, setPdfHintModalOpen] = useState(false);
   const [pdfFilename, setPdfFilename] = useState("");
+  const [rehypeRawPlugin, setRehypeRawPlugin] = useState(null);
   const folderInputRef = useRef(null);
   const pdfFilenameInputRef = useRef(null);
 
@@ -745,6 +929,14 @@ function MdViewerPage({
   );
 
   const printableMarkdown = useMemo(() => stripFirstMarkdownTitle(markdownText), [markdownText]);
+  const needsRawHtmlPlugin = useMemo(() => hasRawHtmlTag(printableMarkdown), [printableMarkdown]);
+  const rehypePlugins = useMemo(() => {
+    if (!needsRawHtmlPlugin || !rehypeRawPlugin) {
+      return [];
+    }
+
+    return [rehypeRawPlugin];
+  }, [needsRawHtmlPlugin, rehypeRawPlugin]);
   const splitContent = useMemo(() => splitMarkdownByLevel3(printableMarkdown), [printableMarkdown]);
   const printHeaderTitle = useMemo(() => {
     const fallbackTitle = getPathFilename(selectedMdPath);
@@ -754,6 +946,28 @@ function MdViewerPage({
     () => normalizePdfFilename(pdfFilename) || printHeaderTitle,
     [pdfFilename, printHeaderTitle]
   );
+
+  useEffect(() => {
+    if (!needsRawHtmlPlugin || rehypeRawPlugin) {
+      return;
+    }
+
+    let cancelled = false;
+
+    import("rehype-raw")
+      .then((module) => {
+        if (cancelled) {
+          return;
+        }
+
+        setRehypeRawPlugin(() => module.default);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [needsRawHtmlPlugin, rehypeRawPlugin]);
 
   const readMarkdown = useCallback(async (targetPath, files) => {
     const target = files.find((item) => item.pathKey === targetPath);
@@ -891,6 +1105,36 @@ function MdViewerPage({
     setPdfHintModalOpen(true);
   }, [printHeaderTitle, selectedMdPath]);
 
+  const onSelectMdFile = useCallback(
+    (nextPathKey) => {
+      void readMarkdown(nextPathKey, mdFiles);
+    },
+    [mdFiles, readMarkdown]
+  );
+
+  const onHeadingScaleChange = useCallback((event) => {
+    setHeadingScale(pickOption(HEADING_SCALE_OPTIONS, event.target.value, "medium"));
+  }, []);
+
+  const onImageWidthChange = useCallback(
+    (event) => {
+      setImageWidth(pickOption(imageWidthOptions, event.target.value, "260"));
+    },
+    [imageWidthOptions]
+  );
+
+  const onImageAlignChange = useCallback((event) => {
+    setImageAlign(pickOption(IMAGE_ALIGN_OPTIONS, event.target.value, "left"));
+  }, []);
+
+  const onLayoutChange = useCallback((event) => {
+    setLayoutMode(pickOption(LAYOUT_OPTIONS, event.target.value, "double"));
+  }, []);
+
+  const onThemeChange = useCallback((event) => {
+    setThemeMode(pickOption(THEME_OPTIONS, event.target.value, "dark"));
+  }, []);
+
   const resetAllConfig = useCallback(() => {
     setHeadingScale(pickOption(HEADING_SCALE_OPTIONS, "medium", "medium"));
     setLayoutMode(pickOption(LAYOUT_OPTIONS, "double", "double"));
@@ -1013,121 +1257,31 @@ function MdViewerPage({
         ) : null}
 
         {mdFiles.length > 1 ? (
-          <section className="md-picker">
-            <div className="md-picker-list">
-              {mdFiles.map((item) => (
-                <button
-                  type="button"
-                  key={item.pathKey}
-                  className={selectedMdPath === item.pathKey ? "is-selected" : ""}
-                  onClick={() => readMarkdown(item.pathKey, mdFiles)}
-                >
-                  {item.path}
-                </button>
-              ))}
-            </div>
-          </section>
+          <MdFilePicker
+            mdFiles={mdFiles}
+            selectedMdPath={selectedMdPath}
+            onSelectMdFile={onSelectMdFile}
+          />
         ) : null}
 
         {hasPickedFolder ? (
-          <section className="md-controls" aria-label="markdown display controls">
-            <div className="md-controls-group">
-              <span>{t.controlHeadingSize}</span>
-              <select
-                className="md-controls-select"
-                value={headingScale.key}
-                onChange={(event) => setHeadingScale(pickOption(HEADING_SCALE_OPTIONS, event.target.value, "medium"))}
-                aria-label={t.controlHeadingSize}
-              >
-                {HEADING_SCALE_OPTIONS.map((item) => (
-                  <option value={item.key} key={item.key}>
-                    {item.key === "small"
-                      ? t.controlSizeSmall
-                      : item.key === "medium"
-                        ? t.controlSizeMedium
-                        : t.controlSizeLarge}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md-controls-group md-controls-group-image">
-              <span>{t.controlImageWidth}</span>
-                <select
-                  className="md-controls-select"
-                  value={imageWidth.key}
-                  onChange={(event) => setImageWidth(pickOption(imageWidthOptions, event.target.value, "260"))}
-                  aria-label={t.controlImageWidth}
-                >
-                {imageWidthOptions.map((item) => (
-                  <option value={item.key} key={item.key}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md-controls-group">
-              <span>{t.controlImageAlign}</span>
-                <select
-                  className="md-controls-select"
-                  value={imageAlign.key}
-                  onChange={(event) => setImageAlign(pickOption(IMAGE_ALIGN_OPTIONS, event.target.value, "left"))}
-                  aria-label={t.controlImageAlign}
-                >
-                {IMAGE_ALIGN_OPTIONS.map((item) => (
-                  <option value={item.key} key={item.key}>
-                    {item.key === "left"
-                      ? t.controlAlignLeft
-                      : item.key === "center"
-                        ? t.controlAlignCenter
-                        : t.controlAlignRight}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md-controls-group">
-              <span>{t.controlLayout}</span>
-                <select
-                  className="md-controls-select"
-                  value={layoutMode.key}
-                  onChange={(event) => setLayoutMode(pickOption(LAYOUT_OPTIONS, event.target.value, "double"))}
-                  aria-label={t.controlLayout}
-                >
-                {LAYOUT_OPTIONS.map((item) => (
-                  <option value={item.key} key={item.key}>
-                    {item.key === "single" ? t.controlLayoutSingle : t.controlLayoutDouble}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md-controls-group">
-              <span>{t.controlTheme}</span>
-              <select
-                className="md-controls-select"
-                value={themeMode.key}
-                onChange={(event) => setThemeMode(pickOption(THEME_OPTIONS, event.target.value, "dark"))}
-                aria-label={t.controlTheme}
-              >
-                {THEME_OPTIONS.map((item) => (
-                  <option value={item.key} key={item.key}>
-                    {item.key === "light" ? t.themeLight : t.themeDark}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md-controls-action">
-              <button type="button" className="md-controls-reset" onClick={resetAllConfig}>
-                {t.resetConfig ?? "Reset"}
-              </button>
-              <button type="button" onClick={exportPdf} disabled={!markdownText}>
-                {t.exportPdf}
-              </button>
-            </div>
-          </section>
+          <MdControls
+            t={t}
+            headingScaleKey={headingScale.key}
+            imageWidthKey={imageWidth.key}
+            imageAlignKey={imageAlign.key}
+            layoutModeKey={layoutMode.key}
+            themeModeKey={themeMode.key}
+            imageWidthOptions={imageWidthOptions}
+            onHeadingScaleChange={onHeadingScaleChange}
+            onImageWidthChange={onImageWidthChange}
+            onImageAlignChange={onImageAlignChange}
+            onLayoutChange={onLayoutChange}
+            onThemeChange={onThemeChange}
+            onReset={resetAllConfig}
+            onExportPdf={exportPdf}
+            canExport={Boolean(markdownText)}
+          />
         ) : null}
 
         {hasPickedFolder ? (
@@ -1144,30 +1298,13 @@ function MdViewerPage({
                     "--md-image-width": imageWidth.width
                   }}
                 >
-                  {layoutMode.key === "double" && splitContent.sections.length > 1 ? (
-                    <>
-                      {splitContent.lead ? (
-                        <div className="md-double-intro">
-                          <ReactMarkdown rehypePlugins={[rehypeRaw]} components={renderers}>
-                            {splitContent.lead}
-                          </ReactMarkdown>
-                        </div>
-                      ) : null}
-                      <div className="md-double-grid">
-                        {splitContent.sections.map((section, index) => (
-                          <section className="md-double-item" key={`${index}-${section.slice(0, 24)}`}>
-                            <ReactMarkdown rehypePlugins={[rehypeRaw]} components={renderers}>
-                              {section}
-                            </ReactMarkdown>
-                          </section>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <ReactMarkdown rehypePlugins={[rehypeRaw]} components={renderers}>
-                      {printableMarkdown}
-                    </ReactMarkdown>
-                  )}
+                  <MarkdownDocument
+                    layoutModeKey={layoutMode.key}
+                    splitContent={splitContent}
+                    printableMarkdown={printableMarkdown}
+                    renderers={renderers}
+                    rehypePlugins={rehypePlugins}
+                  />
                 </article>
               </>
             ) : (

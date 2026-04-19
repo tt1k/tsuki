@@ -37,10 +37,10 @@ struct TsukiApp: App {
                         windowGlassOpacity: settingsStore.windowGlassOpacity
                     )
                 }
-                .onChange(of: settingsStore.appearanceMode) { mode in
+                .onChangeCompat(of: settingsStore.appearanceMode) { mode in
                     appDelegate.applyAppearanceMode(mode, windowGlassOpacity: settingsStore.windowGlassOpacity)
                 }
-                .onChange(of: settingsStore.windowGlassOpacity) { opacity in
+                .onChangeCompat(of: settingsStore.windowGlassOpacity) { opacity in
                     appDelegate.applyAppearanceMode(settingsStore.appearanceMode, windowGlassOpacity: opacity)
                 }
         }

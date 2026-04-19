@@ -377,6 +377,8 @@
 
 .md-double-item {
   min-width: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: 560px;
 }
 
 .md-content.md-theme-light {
@@ -436,6 +438,11 @@
 .md-content table,
 .md-content blockquote {
   margin: 0.8em 0;
+}
+
+.md-content > * {
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
 }
 
 .md-content code {
@@ -709,6 +716,12 @@
 
   .md-content > :first-child {
     margin-top: 0;
+  }
+
+  .md-content > *,
+  .md-double-item {
+    content-visibility: visible;
+    contain-intrinsic-size: auto;
   }
 
   .md-content > :last-child {

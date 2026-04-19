@@ -44,9 +44,7 @@ struct InputCardView: View {
                     .padding(.trailing, inputTrailingInset)
                     .onTapGesture {
                         guard !isTranslating else { return }
-                        inputLocked = false
-                        shouldMoveCaretOnFocus = false
-                        focused = true
+                        unlockAndFocusInput(moveCaretToEnd: false)
                     }
             }
 
@@ -63,35 +61,25 @@ struct InputCardView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusInput)) { _ in
-            inputLocked = false
-            shouldMoveCaretOnFocus = true
-            focused = true
+            unlockAndFocusInput(moveCaretToEnd: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: .triggerTranslate)) { _ in
-            inputLocked = true
-            focused = false
+            lockAndDefocusInput()
         }
-        .onChange(of: focused) { isFocused in
+        .onChangeCompat(of: focused) { isFocused in
             guard isFocused, shouldMoveCaretOnFocus else { return }
             DispatchQueue.main.async {
                 moveCaretToEndIfNeeded()
                 shouldMoveCaretOnFocus = false
             }
         }
-        .onChange(of: isTranslating) { translating in
-            if translating {
-                inputLocked = true
-                focused = false
-            } else {
-                inputLocked = true
-                focused = false
-            }
+        .onChangeCompat(of: isTranslating) { translating in
+            guard translating else { return }
+            lockAndDefocusInput()
         }
         .onAppear {
             DispatchQueue.main.async {
-                inputLocked = false
-                shouldMoveCaretOnFocus = false
-                focused = true
+                unlockAndFocusInput(moveCaretToEnd: false)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 moveCaretToEndIfNeeded()
@@ -182,9 +170,30 @@ struct InputCardView: View {
     }
 
     private func handleTranslateTapped() {
-        inputLocked = true
-        focused = false
+        lockAndDefocusInput()
         onTranslate()
+    }
+
+    private func lockAndDefocusInput() {
+        if !inputLocked {
+            inputLocked = true
+        }
+
+        if focused {
+            focused = false
+        }
+    }
+
+    private func unlockAndFocusInput(moveCaretToEnd: Bool) {
+        if inputLocked {
+            inputLocked = false
+        }
+
+        shouldMoveCaretOnFocus = moveCaretToEnd
+
+        if !focused {
+            focused = true
+        }
     }
 
     private func moveCaretToEndIfNeeded() {
