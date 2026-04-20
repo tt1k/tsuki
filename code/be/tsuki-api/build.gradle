@@ -1,0 +1,124 @@
+plugins {
+    id 'org.springframework.boot' version '3.5.13' apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
+}
+
+ext {
+    springVersion = '6.2.18'
+    mapStructVersion = '1.6.3'
+    lombokVersion = '1.18.44'
+    jacksonVersion = '2.20.2'
+    mybatisVersion = '3.5.19'
+    mybatisPlusVersion = '3.5.7'
+}
+
+group = 'com.tsuki'
+version = '0.1.0-SNAPSHOT'
+
+subprojects {
+    apply plugin: 'java-library'
+    apply plugin: 'io.spring.dependency-management'
+
+    group = rootProject.group
+    version = rootProject.version
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.13'
+        }
+    }
+
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+
+    dependencies {
+        api "org.springframework:spring-context:${springVersion}"
+
+        implementation "org.mapstruct:mapstruct:${mapStructVersion}"
+
+        compileOnly "org.projectlombok:lombok:${lombokVersion}"
+        annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+        annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+        annotationProcessor "org.mapstruct:mapstruct-processor:${mapStructVersion}"
+
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}
+
+project(':tsuki-common') {
+    dependencies {
+        api 'org.apache.commons:commons-collections4:4.5.0'
+        api 'org.apache.commons:commons-lang3:3.20.0'
+        api 'org.apache.commons:commons-text:1.15.0'
+    }
+}
+
+project(':tsuki-repository') {
+    dependencies {
+        api project(':tsuki-common')
+        api "org.mybatis:mybatis:${mybatisVersion}"
+        api "com.baomidou:mybatis-plus-core:${mybatisPlusVersion}"
+    }
+}
+
+project(':tsuki-integration') {
+    dependencies {
+        api project(':tsuki-common')
+    }
+}
+
+project(':tsuki-service') {
+    dependencies {
+        api project(':tsuki-common')
+        api project(':tsuki-repository')
+        api project(':tsuki-integration')
+        api 'org.springframework.boot:spring-boot-starter'
+        api "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    }
+}
+
+project(':tsuki-api') {
+    apply plugin: 'org.springframework.boot'
+
+    dependencies {
+        implementation project(':tsuki-common')
+        implementation project(':tsuki-service')
+        implementation 'org.springframework.boot:spring-boot-starter-web'
+    }
+}
+
+project(':tsuki-console') {
+    apply plugin: 'org.springframework.boot'
+
+    dependencies {
+        implementation project(':tsuki-service')
+        implementation 'org.springframework.boot:spring-boot-starter-web'
+    }
+}
+
+project(':tsuki-task') {
+    apply plugin: 'org.springframework.boot'
+
+    dependencies {
+        implementation project(':tsuki-service')
+        implementation 'org.springframework.boot:spring-boot-starter'
+    }
+}

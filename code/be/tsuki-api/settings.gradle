@@ -1,0 +1,9 @@
+rootProject.name = 'tsuki'
+
+include 'tsuki-common'
+include 'tsuki-repository'
+include 'tsuki-integration'
+include 'tsuki-service'
+include 'tsuki-api'
+include 'tsuki-console'
+include 'tsuki-task'
