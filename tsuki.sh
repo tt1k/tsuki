@@ -79,7 +79,7 @@ Commands:
   fe mac stop          Stop TsukiApp (macOS)
   fe mac build         Build TsukiApp (macOS)
   fe mac clean         Clean frontend build cache (macOS)
-  fe mac package       Build signed versioned .dmg in dist/ (macOS)
+  fe mac package       Build signed versioned .dmg in build/ (macOS)
   fe web run           Run web frontend dev server in background
   fe web stop          Stop web frontend dev server
   fe web status        Show web frontend dev server status
@@ -480,7 +480,7 @@ maybe_commit_and_tag_after_package() {
 run_fe() {
   local action="${1:-run}"
   local app_name="Tsuki"
-  local app_dir="$ROOT_DIR/dist/${app_name}.app"
+  local app_dir="$ROOT_DIR/build/${app_name}.app"
 
   stop_fe_processes() {
     local stopped=0
@@ -563,8 +563,8 @@ run_fe() {
         exit 1
       fi
 
-      packaged_dmg_path="$ROOT_DIR/dist/${app_name}-${version_suffix}.dmg"
-      mkdir -p "$ROOT_DIR/dist"
+      packaged_dmg_path="$ROOT_DIR/build/${app_name}-${version_suffix}.dmg"
+      mkdir -p "$ROOT_DIR/build"
 
       confirm_package_version "$short_version" "$packaged_dmg_path"
 
@@ -620,7 +620,7 @@ run_fe() {
       log_success "Packaged dmg: $packaged_dmg_path"
       update_dev_defaults_after_package "$short_version"
       maybe_commit_and_tag_after_package "$short_version"
-      open "$ROOT_DIR/dist"
+      open "$ROOT_DIR/build"
       ;;
     *)
       log_error "Unknown frontend action: $action"
