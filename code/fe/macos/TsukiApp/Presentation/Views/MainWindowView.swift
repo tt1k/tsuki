@@ -90,8 +90,7 @@ struct MainWindowView: View {
 
         OutputCardScreenshotWriter.save(
             images: validImages,
-            japaneseWord: result.headwordKanji,
-            targetLang: result.targetLang
+            japaneseWord: result.kanji
         )
     }
 

@@ -18,7 +18,7 @@ struct TranslationUseCase {
         )
 
         let payload = try await translatorProvider.translate(request)
-        let result = tokenizeAndAnnotateUseCase.execute(payload: payload, targetLang: request.targetLang)
+        let result = tokenizeAndAnnotateUseCase.execute(payload: payload)
         await translationCacheStore.save(result, for: request)
         return result
     }

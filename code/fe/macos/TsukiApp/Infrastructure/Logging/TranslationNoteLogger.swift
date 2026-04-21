@@ -15,7 +15,7 @@ enum TranslationNoteLogger {
             do {
                 try fileManager.createDirectory(at: noteDirectory, withIntermediateDirectories: true)
 
-                let headword = oneLine(result.headwordKanji)
+                let headword = oneLine(result.kanji)
                 for theme in NoteTheme.allCases {
                     let noteURL = noteDirectory.appendingPathComponent(theme.noteFileName, isDirectory: false)
                     if !fileManager.fileExists(atPath: noteURL.path) {
@@ -23,7 +23,7 @@ enum TranslationNoteLogger {
                         try header.write(to: noteURL, atomically: true, encoding: .utf8)
                     }
 
-                    let screenshotPath = "\(NoteAssetNaming.screenshotFolderName)/\(NoteAssetNaming.screenshotFileName(for: headword, targetLang: result.targetLang, theme: theme))"
+                    let screenshotPath = "\(NoteAssetNaming.screenshotFolderName)/\(NoteAssetNaming.screenshotFileName(for: headword, theme: theme))"
                     var lines: [String] = []
                     lines.append("### **\(headword)**")
                     lines.append("")

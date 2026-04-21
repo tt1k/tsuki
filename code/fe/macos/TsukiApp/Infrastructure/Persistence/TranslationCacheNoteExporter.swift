@@ -20,15 +20,13 @@ enum TranslationCacheNoteExporter {
         try "# Tsuki Note \(dayLabel) \(NoteTheme.night.noteTitleSuffix)\n\n".write(to: noteNightURL, atomically: true, encoding: .utf8)
 
         for record in records {
-            let headword = oneLine(record.result.headwordKanji)
+            let headword = oneLine(record.result.kanji)
             let dayFileName = NoteAssetNaming.screenshotFileName(
                 for: headword,
-                targetLang: record.result.targetLang,
                 theme: .day
             )
             let nightFileName = NoteAssetNaming.screenshotFileName(
                 for: headword,
-                targetLang: record.result.targetLang,
                 theme: .night
             )
 

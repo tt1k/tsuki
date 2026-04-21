@@ -21,8 +21,8 @@ enum NoteTheme: String, CaseIterable {
 enum NoteAssetNaming {
     static let screenshotFolderName = "screenshot"
 
-    static func screenshotFileName(for japaneseWord: String, targetLang: String, theme: NoteTheme) -> String {
-        "\(sanitizeFileName(japaneseWord))-\(sanitizeFileName(targetLang))-\(theme.rawValue).png"
+    static func screenshotFileName(for japaneseWord: String, theme: NoteTheme) -> String {
+        "\(sanitizeFileName(japaneseWord))-\(theme.rawValue).png"
     }
 
     private static func sanitizeFileName(_ text: String) -> String {

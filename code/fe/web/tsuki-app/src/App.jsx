@@ -10,6 +10,7 @@ import {
 import { collectFilesFromDataTransfer } from "./md-drop-utils";
 
 const MdViewerPage = lazy(() => import("./MdViewerPage"));
+const NotePage = lazy(() => import("./NotePage"));
 
 function normalizeEntryPath(path = "") {
   return String(path)
@@ -174,6 +175,10 @@ function App() {
     void import("./MdViewerPage");
   }, []);
 
+  const preloadNotePage = useCallback(() => {
+    void import("./NotePage");
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
@@ -195,6 +200,18 @@ function App() {
     setMdInitialEntries(initialEntries);
     setPathname("/md");
   }, [preloadMdViewerPage]);
+
+  const navigateToRoute = useCallback((routePath) => {
+    if (typeof window !== "undefined" && window.location.pathname !== routePath) {
+      window.history.pushState(null, "", routePath);
+    }
+    setPathname(routePath);
+  }, []);
+
+  const openNotePage = useCallback(() => {
+    preloadNotePage();
+    navigateToRoute("/note");
+  }, [navigateToRoute, preloadNotePage]);
 
   const [language, setLanguage] = useState(() => {
     const savedLanguage = readLanguageFromCookie();
@@ -407,6 +424,19 @@ function App() {
     );
   }
 
+  if (pathname === "/note") {
+    return (
+      <Suspense fallback={<main className="container"><section className="hero"><p>{t.statusReady}...</p></section></main>}>
+        <NotePage
+          language={language}
+          onLanguageChange={onLanguageChange}
+          languageOptions={LANGUAGES}
+          productName={productName}
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <>
       <header className="nav">
@@ -437,6 +467,14 @@ function App() {
             </label>
           </div>
           <div className="nav-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={openNotePage}
+              onMouseEnter={preloadNotePage}
+            >
+              Note
+            </button>
             <a href={RELEASE_URL} className="btn btn-primary" target="_blank" rel="noreferrer">
               <AppleDownloadIcon />
               {t.lastCtaBtn}

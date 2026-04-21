@@ -15,68 +15,35 @@ struct TranslationRequest {
 }
 
 struct TranslationResult: Codable {
-    let headwordKanji: String
-    let headwordKana: String
+    let kanji: String
+    let kana: String
     let meaning: String
     let sentence: String
     let tokens: [WordToken]
-    let targetLang: String
 
     init(
-        headwordKanji: String,
-        headwordKana: String,
+        kanji: String,
+        kana: String,
         meaning: String,
         sentence: String,
-        tokens: [WordToken],
-        targetLang: String = "ja"
+        tokens: [WordToken]
     ) {
-        self.headwordKanji = headwordKanji
-        self.headwordKana = headwordKana
+        self.kanji = kanji
+        self.kana = kana
         self.meaning = meaning
         self.sentence = sentence
         self.tokens = tokens
-        self.targetLang = targetLang
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case headwordKanji
-        case headwordKana
-        case meaning
-        case sentence
-        case tokens
-        case targetLang
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        headwordKanji = try container.decode(String.self, forKey: .headwordKanji)
-        headwordKana = try container.decode(String.self, forKey: .headwordKana)
-        meaning = try container.decode(String.self, forKey: .meaning)
-        sentence = try container.decode(String.self, forKey: .sentence)
-        tokens = try container.decode([WordToken].self, forKey: .tokens)
-        targetLang = try container.decodeIfPresent(String.self, forKey: .targetLang) ?? "ja"
     }
 }
 
-struct WordToken: Identifiable, Hashable, Codable {
-    let id: UUID
+struct WordToken: Hashable, Codable {
     let kanji: String
     let furigana: String
-    let partOfSpeech: String?
-    let highlight: HighlightColor
-}
-
-enum HighlightColor: String, CaseIterable, Codable {
-    case yellow
-    case purple
-    case green
-    case blue
-    case gray
 }
 
 struct ProviderTranslationPayload {
-    let headwordKanji: String
-    let headwordKana: String
+    let kanji: String
+    let kana: String
     let meaning: String
     let sentence: String
     let tokens: [RawWordToken]

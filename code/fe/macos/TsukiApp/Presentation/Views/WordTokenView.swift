@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WordTokenView: View {
     let token: WordToken
+    let index: Int
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -28,12 +29,17 @@ struct WordTokenView: View {
     }
 
     private var capsuleColor: Color {
-        switch token.highlight {
-        case .yellow: return DesignTokens.ColorToken.yellow
-        case .purple: return DesignTokens.ColorToken.purple
-        case .green: return DesignTokens.ColorToken.green
-        case .blue: return DesignTokens.ColorToken.blue
-        case .gray: return DesignTokens.ColorToken.gray
+        let colors: [Color] = [
+            DesignTokens.ColorToken.yellow,
+            DesignTokens.ColorToken.purple,
+            DesignTokens.ColorToken.green,
+            DesignTokens.ColorToken.blue,
+            DesignTokens.ColorToken.gray
+        ]
+        let seedText = token.kanji + token.furigana + String(index)
+        let seed = seedText.unicodeScalars.reduce(UInt64(0)) { partial, scalar in
+            (partial &* 31) &+ UInt64(scalar.value)
         }
+        return colors[Int(seed % UInt64(colors.count))]
     }
 }

@@ -104,12 +104,12 @@ struct DatabaseEditorSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(record.result.headwordKanji)
+                    Text(record.result.kanji)
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(DesignTokens.ColorToken.textMain)
                         .lineLimit(1)
 
-                    Text(record.result.headwordKana)
+                    Text(record.result.kana)
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(DesignTokens.ColorToken.textDim)
                         .lineLimit(1)
@@ -127,10 +127,19 @@ struct DatabaseEditorSheetView: View {
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
                     .lineLimit(1)
 
-                Text(record.result.meaning)
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundStyle(DesignTokens.ColorToken.textDim)
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text(record.result.meaning)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textDim)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+
+                    Text("#\(record.id)")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(DesignTokens.ColorToken.textDim)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -252,7 +261,7 @@ struct DatabaseEditorSheetView: View {
         } else {
             nextRecords = records.filter { record in
                 record.queryText.localizedCaseInsensitiveContains(trimmedQuery)
-                    || record.result.headwordKanji.localizedCaseInsensitiveContains(trimmedQuery)
+                    || record.result.kanji.localizedCaseInsensitiveContains(trimmedQuery)
                     || record.result.meaning.localizedCaseInsensitiveContains(trimmedQuery)
             }
         }
@@ -266,8 +275,8 @@ struct DatabaseEditorSheetView: View {
 
     private func copyRecordRow(_ record: SQLiteTranslationCacheStore.CachedRecord) {
         let rowText = [
-            record.result.headwordKanji,
-            record.result.headwordKana,
+            record.result.kanji,
+            record.result.kana,
             Self.dateFormatter.string(from: record.updatedAt),
             displaySentence(record.result.sentence),
             record.result.meaning

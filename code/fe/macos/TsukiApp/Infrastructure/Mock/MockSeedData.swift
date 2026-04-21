@@ -4,8 +4,8 @@ enum MockSeedData {
     static let requestText = "結構"
 
     static let payload = ProviderTranslationPayload(
-        headwordKanji: "結構",
-        headwordKana: "けっこう",
+        kanji: "結構",
+        kana: "けっこう",
         meaning: "还不错; 相当; 足够",
         sentence: "はい そう で 最近 私 も ね その 一人 の 时间 を 楽しむ ために 結構",
         tokens: [

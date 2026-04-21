@@ -34,8 +34,8 @@ struct OutputCardView: View {
             }
 
             FlowLayout(spacing: DesignTokens.Size.flowColumnGap, rowSpacing: DesignTokens.Size.flowRowGap) {
-                ForEach(result?.tokens ?? []) { token in
-                    WordTokenView(token: token)
+                ForEach(Array((result?.tokens ?? []).enumerated()), id: \.offset) { index, token in
+                    WordTokenView(token: token, index: index)
                 }
             }
         }
@@ -75,10 +75,10 @@ struct OutputCardView: View {
             } else if let result {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
-                        Text(result.headwordKanji)
+                        Text(result.kanji)
                             .font(DesignTokens.FontToken.monoBold)
                             .foregroundStyle(DesignTokens.ColorToken.textMain)
-                        Text(result.headwordKana)
+                        Text(result.kana)
                             .font(DesignTokens.FontToken.monoBold)
                             .foregroundStyle(DesignTokens.ColorToken.textDim)
                     }

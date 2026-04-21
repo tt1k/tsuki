@@ -128,8 +128,8 @@ struct CompletionsDictionaryHelper: TranslatorProvider {
         }
 
         return ProviderTranslationPayload(
-            headwordKanji: parsed.kanji,
-            headwordKana: parsed.reading,
+            kanji: parsed.kanji,
+            kana: parsed.reading,
             meaning: parsed.meaning,
             sentence: parsed.example,
             tokens: supplementMissingTokens(in: parsed.example, tokens: rawTokens)

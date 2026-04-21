@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 enum OutputCardScreenshotWriter {
-    static func save(images: [NoteTheme: NSImage], japaneseWord: String, targetLang: String) {
+    static func save(images: [NoteTheme: NSImage], japaneseWord: String) {
         let fileManager = FileManager.default
         let noteDirectory = fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Logs/tsuki/note", isDirectory: true)
@@ -16,7 +16,7 @@ enum OutputCardScreenshotWriter {
             for (theme, image) in images {
                 let outputURL = screenshotDirectory
                     .appendingPathComponent(
-                        NoteAssetNaming.screenshotFileName(for: japaneseWord, targetLang: targetLang, theme: theme),
+                        NoteAssetNaming.screenshotFileName(for: japaneseWord, theme: theme),
                         isDirectory: false
                     )
 
