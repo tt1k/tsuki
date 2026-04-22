@@ -26,6 +26,7 @@ const pack = {
     lastCtaTitle: "讓每次翻譯都更接近掌握",
     lastCtaDesc: "現在開始體驗言葉之月，建立更流暢的學習鏈路",
     lastCtaBtn: "立即下載",
+    noteBtn: "筆記",
     statusReady: "就緒",
     mdEntryTitle: "把資料夾拖到這裡",
     mdEntryNoMarkdown: "該資料夾中沒有 Markdown 檔案",

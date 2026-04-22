@@ -26,6 +26,7 @@ const pack = {
     lastCtaTitle: "Prevratite kazhdyi perevod v obuchenie",
     lastCtaDesc: "Nachnite s 月の言葉 uzhe seichas",
     lastCtaBtn: "Skachat",
+    noteBtn: "Zametki",
     statusReady: "Gotovo",
     mdEntryTitle: "Peretashchite papku siuda",
     mdEntryNoMarkdown: "V etoi papke net failov Markdown",

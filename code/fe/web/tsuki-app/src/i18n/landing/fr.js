@@ -26,6 +26,7 @@ const pack = {
     lastCtaTitle: "Transformez chaque traduction en apprentissage",
     lastCtaDesc: "Demarrez avec 月の言葉 des maintenant",
     lastCtaBtn: "Telecharger",
+    noteBtn: "Notes",
     statusReady: "Pret",
     mdEntryTitle: "Deposez un dossier ici",
     mdEntryNoMarkdown: "Aucun fichier Markdown trouve dans ce dossier",

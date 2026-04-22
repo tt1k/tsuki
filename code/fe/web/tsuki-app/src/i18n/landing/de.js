@@ -26,6 +26,7 @@ const pack = {
     lastCtaTitle: "Mach aus jeder Ubersetzung Lernen",
     lastCtaDesc: "Starte jetzt mit 月の言葉",
     lastCtaBtn: "Jetzt herunterladen",
+    noteBtn: "Notizen",
     statusReady: "Bereit",
     mdEntryTitle: "Ordner hier ablegen",
     mdEntryNoMarkdown: "In diesem Ordner wurden keine Markdown-Dateien gefunden",

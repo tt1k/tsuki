@@ -26,6 +26,7 @@ const pack = {
     lastCtaTitle: "Turn every translation into learning",
     lastCtaDesc: "Start with Tsuki Translate and connect input, understanding, and memory",
     lastCtaBtn: "Download now",
+    noteBtn: "Note",
     statusReady: "Ready",
     mdEntryTitle: "Drop a folder here",
     mdEntryNoMarkdown: "No Markdown files found in this folder",

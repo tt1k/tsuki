@@ -26,6 +26,7 @@ const pack = {
     lastCtaTitle: "让每次翻译都更接近掌握",
     lastCtaDesc: "现在开始体验言叶之月，建立更顺滑的学习链路",
     lastCtaBtn: "立即下载",
+    noteBtn: "笔记",
     statusReady: "就绪",
     mdEntryTitle: "把文件夹拖到这里",
     mdEntryNoMarkdown: "未检测到 Markdown",

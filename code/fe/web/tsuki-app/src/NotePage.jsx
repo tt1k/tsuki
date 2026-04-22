@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   NOTE_DEFAULT_INPUT_SET,
   NOTE_JA_ENTRIES,
@@ -17,6 +17,8 @@ const HIGHLIGHT_CLASS_MAP = {
 const FALLBACK_HIGHLIGHTS = ["yellow", "purple", "green", "blue", "gray"];
 const PUNCTUATION_REGEX = /^[、。！？,.!?・]$/;
 const SENTENCE_BREAK_REGEX = /[。.]/;
+const KANA_ONLY_REGEX = /^[\u3040-\u309F\u30A0-\u30FFー]+$/;
+const SYMBOL_ONLY_REGEX = /^[「」『』（）\[\]［］【】〈〉《》〔〕｛｝…‥〜～ー―\-・、。！？,.!?〆〃〇]+$/;
 
 function isWhitespaceToken(value) {
   return !String(value).trim();
@@ -28,6 +30,20 @@ function getTokenHighlight(text, index) {
   }
 
   return FALLBACK_HIGHLIGHTS[index % FALLBACK_HIGHLIGHTS.length];
+}
+
+function isKanaOnlyText(value) {
+  const normalized = String(value || "").trim();
+  return normalized.length > 0 && KANA_ONLY_REGEX.test(normalized);
+}
+
+function shouldHideFurigana(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return true;
+  }
+
+  return isKanaOnlyText(normalized) || SYMBOL_ONLY_REGEX.test(normalized);
 }
 
 function toFallbackTokens(text, language) {
@@ -79,14 +95,24 @@ function resolveOutputModel(inputText, language, noteCopy) {
 
 function withSentenceBreaks(tokens = []) {
   const items = [];
+  let lineNumber = 1;
+
+  if (tokens.length > 0) {
+    items.push({ type: "break", key: "break-initial", lineNumber });
+  }
 
   tokens.forEach((token, index) => {
     items.push({ type: "token", token, key: `token-${index}` });
 
-    if (SENTENCE_BREAK_REGEX.test(token.kanji || "")) {
-      items.push({ type: "break", key: `break-${index}` });
+    if (SENTENCE_BREAK_REGEX.test(token.kanji || "") && index < tokens.length - 1) {
+      lineNumber += 1;
+      items.push({ type: "break", key: `break-${index}`, lineNumber });
     }
   });
+
+  if (tokens.length > 0) {
+    items.push({ type: "break", key: "break-final" });
+  }
 
   return items;
 }
@@ -155,6 +181,14 @@ export default function NotePage({ language, onLanguageChange, languageOptions, 
     return baseOutputModel;
   }, [baseOutputModel, computedJaTokens, language]);
   const outputItems = useMemo(() => withSentenceBreaks(outputModel.tokens), [outputModel.tokens]);
+  const copyTokenText = useCallback((text) => {
+    const normalized = String(text || "").trim();
+    if (!normalized || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+
+    void navigator.clipboard.writeText(normalized);
+  }, []);
 
   return (
     <main className="note-page-wrap">
@@ -219,15 +253,30 @@ export default function NotePage({ language, onLanguageChange, languageOptions, 
           <div className="note-token-flow">
             {outputItems.map((item) => {
               if (item.type === "break") {
-                return <span key={item.key} className="note-token-break" aria-hidden="true" />;
+                return (
+                  <span key={item.key} className="note-token-break" aria-hidden="true">
+                    {typeof item.lineNumber === "number" ? (
+                      <span className="note-token-line-no">#{item.lineNumber}</span>
+                    ) : null}
+                  </span>
+                );
               }
 
               const token = item.token;
               const capsuleClass = HIGHLIGHT_CLASS_MAP[token.highlight] || HIGHLIGHT_CLASS_MAP.gray;
-              const showCapsule = !PUNCTUATION_REGEX.test(token.kanji || "");
+              const hideFurigana = shouldHideFurigana(token.kanji);
+              const showCapsule = !hideFurigana && !PUNCTUATION_REGEX.test(token.kanji || "");
+              const furigana = hideFurigana ? "" : token.furigana;
+              const hoverableClass = showCapsule ? " note-token-item-hoverable" : "";
+              const plainClass = showCapsule ? "" : " note-token-item-plain";
               return (
-                <span className="note-token-item" key={item.key}>
-                  <span className="note-token-furigana">{token.furigana || " "}</span>
+                <span
+                  className={`note-token-item${hoverableClass}${plainClass}`}
+                  key={item.key}
+                  onClick={showCapsule ? () => copyTokenText(token.kanji) : undefined}
+                  onDoubleClick={showCapsule ? () => copyTokenText(token.kanji) : undefined}
+                >
+                  <span className="note-token-furigana">{furigana || " "}</span>
                   <span className="note-token-text">{token.kanji}</span>
                   {showCapsule ? (
                     <span className={`note-token-capsule ${capsuleClass}`} aria-hidden="true" />

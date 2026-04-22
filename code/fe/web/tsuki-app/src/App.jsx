@@ -473,7 +473,7 @@ function App() {
               onClick={openNotePage}
               onMouseEnter={preloadNotePage}
             >
-              Note
+              {t.noteBtn}
             </button>
             <a href={RELEASE_URL} className="btn btn-primary" target="_blank" rel="noreferrer">
               <AppleDownloadIcon />

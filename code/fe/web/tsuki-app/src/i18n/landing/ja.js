@@ -26,6 +26,7 @@ const pack = {
     lastCtaTitle: "すべての翻訳を、定着する学習へ",
     lastCtaDesc: "月の言葉で入力・理解・記憶の流れをつなげましょう",
     lastCtaBtn: "今すぐダウンロード",
+    noteBtn: "ノート",
     statusReady: "Ready",
     mdEntryTitle: "フォルダをここにドロップ",
     mdEntryNoMarkdown: "このフォルダには Markdown ファイルがありません",
