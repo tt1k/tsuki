@@ -481,17 +481,10 @@ struct SettingsSheetView: View {
 
                 Spacer()
 
-                HStack(spacing: 3) {
-                    Slider(value: $settingsStore.windowGlassOpacity, in: 0.70 ... 1.00, step: 0.01)
-                        .frame(width: 112)
-                        .tint(DesignTokens.ColorToken.textDim)
-
-                    Text(windowOpacityText)
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
-                        .foregroundStyle(DesignTokens.ColorToken.textMain)
-                        .frame(width: 40, alignment: .trailing)
+                HStack(spacing: 0) {
+                    minimalOpacitySlider
                 }
-                .frame(width: 160, alignment: .trailing)
+                .frame(width: 112, alignment: .trailing)
             }
         }
     }
@@ -735,8 +728,59 @@ struct SettingsSheetView: View {
         )
     }
 
-    private var windowOpacityText: String {
-        "\(Int((settingsStore.windowGlassOpacity * 100).rounded()))%"
+    private var minimalOpacitySlider: some View {
+        GeometryReader { proxy in
+            let sliderWidth = max(proxy.size.width, 1)
+            let knobDiameter: CGFloat = 10
+            let progress = opacityProgress
+
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity))
+                    .frame(height: 4)
+
+                Capsule(style: .continuous)
+                    .fill(DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity))
+                    .frame(width: sliderWidth * progress, height: 4)
+
+                Circle()
+                    .fill(DesignTokens.ColorToken.textMain)
+                    .frame(width: knobDiameter, height: knobDiameter)
+                    .offset(x: progress * (sliderWidth - knobDiameter))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        updateWindowOpacity(with: value.location.x, sliderWidth: sliderWidth)
+                    }
+            )
+        }
+        .frame(width: 112, height: 18)
+    }
+
+    private var opacityProgress: CGFloat {
+        let span = opacityRange.upperBound - opacityRange.lowerBound
+        guard span > 0 else { return 0 }
+        let raw = (settingsStore.windowGlassOpacity - opacityRange.lowerBound) / span
+        return CGFloat(min(max(raw, 0), 1))
+    }
+
+    private var opacityRange: ClosedRange<Double> {
+        0.70 ... 1.00
+    }
+
+    private var opacityStep: Double {
+        0.01
+    }
+
+    private func updateWindowOpacity(with locationX: CGFloat, sliderWidth: CGFloat) {
+        guard sliderWidth > 0 else { return }
+        let progress = min(max(locationX / sliderWidth, 0), 1)
+        let rawValue = opacityRange.lowerBound + Double(progress) * (opacityRange.upperBound - opacityRange.lowerBound)
+        let steppedValue = (rawValue / opacityStep).rounded() * opacityStep
+        settingsStore.windowGlassOpacity = min(max(steppedValue, opacityRange.lowerBound), opacityRange.upperBound)
     }
 
     private var opacityTitle: String {

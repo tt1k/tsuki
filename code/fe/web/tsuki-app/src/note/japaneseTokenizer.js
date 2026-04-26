@@ -1,5 +1,6 @@
 let tokenizerPromise;
 let scriptPromise;
+const URL_REGEX = /https?:\/\/[^\s]+/gi;
 
 function ensureKuromojiScriptLoaded() {
   if (typeof window === "undefined") {
@@ -48,28 +49,74 @@ function isPunctuation(surface = "") {
   return /^[、。！？,.!?・]$/.test(surface);
 }
 
+function splitTextWithUrls(value = "") {
+  const source = String(value || "");
+  const segments = [];
+  let lastIndex = 0;
+
+  URL_REGEX.lastIndex = 0;
+  for (const match of source.matchAll(URL_REGEX)) {
+    const matchIndex = match.index ?? -1;
+    const matchedText = match[0] || "";
+    if (matchIndex < 0 || !matchedText) {
+      continue;
+    }
+
+    if (matchIndex > lastIndex) {
+      segments.push({ type: "text", value: source.slice(lastIndex, matchIndex) });
+    }
+
+    segments.push({ type: "url", value: matchedText });
+    lastIndex = matchIndex + matchedText.length;
+  }
+
+  if (lastIndex < source.length) {
+    segments.push({ type: "text", value: source.slice(lastIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ type: "text", value: source }];
+}
+
 export async function tokenizeJapaneseWithReading(text = "") {
   const normalized = String(text || "");
   if (!normalized.trim()) {
     return [];
   }
 
-  if (!tokenizerPromise) {
-    tokenizerPromise = buildTokenizer();
+  const segments = splitTextWithUrls(normalized);
+  const hasTextSegments = segments.some(
+    (segment) => segment.type === "text" && segment.value.trim().length > 0
+  );
+
+  let tokenizer = null;
+  if (hasTextSegments) {
+    if (!tokenizerPromise) {
+      tokenizerPromise = buildTokenizer();
+    }
+
+    tokenizer = await tokenizerPromise;
   }
 
-  const tokenizer = await tokenizerPromise;
-  const rawTokens = tokenizer.tokenize(normalized);
+  return segments.flatMap((segment) => {
+    if (segment.type === "url") {
+      return [{ kanji: segment.value, furigana: "" }];
+    }
 
-  return rawTokens
-    .map((token) => {
-      const surface = token.surface_form || "";
-      const reading = token.reading ? toHiragana(token.reading) : "";
+    if (!tokenizer || !segment.value.trim()) {
+      return [];
+    }
 
-      return {
-        kanji: surface,
-        furigana: isPunctuation(surface) ? "" : reading
-      };
-    })
-    .filter((token) => token.kanji.trim().length > 0);
+    return tokenizer
+      .tokenize(segment.value)
+      .map((token) => {
+        const surface = token.surface_form || "";
+        const reading = token.reading ? toHiragana(token.reading) : "";
+
+        return {
+          kanji: surface,
+          furigana: isPunctuation(surface) ? "" : reading
+        };
+      })
+      .filter((token) => token.kanji.trim().length > 0);
+  });
 }

@@ -18,12 +18,6 @@ final class MainViewModel: ObservableObject {
                 return
             }
 
-            if isTranslating {
-                task?.cancel()
-                task = nil
-                isTranslating = false
-            }
-
             if inputText.isEmpty {
                 state = .idle
             } else {
@@ -45,8 +39,9 @@ final class MainViewModel: ObservableObject {
 
     private let translationUseCase: TranslationUseCase
     private let settingsStore: SettingsStore
-    private var task: Task<Void, Never>?
     private var languageObserver: AnyCancellable?
+    private var latestRequestID: UInt64 = 0
+    private var requestIDSeed: UInt64 = 0
 
     init(translationUseCase: TranslationUseCase, settingsStore: SettingsStore) {
         self.translationUseCase = translationUseCase
@@ -81,10 +76,6 @@ final class MainViewModel: ObservableObject {
     }
 
     func translate() {
-        if isTranslating {
-            return
-        }
-
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             let failure = localizedFailureState(
@@ -124,10 +115,12 @@ final class MainViewModel: ObservableObject {
             return
         }
 
-        task?.cancel()
+        requestIDSeed &+= 1
+        let requestID = requestIDSeed
+        latestRequestID = requestID
         isTranslating = true
 
-        task = Task { [weak self] in
+        Task { [weak self] in
             guard let self else { return }
             do {
                 let result = try await translationUseCase.execute(
@@ -139,19 +132,20 @@ final class MainViewModel: ObservableObject {
                         targetLang: "ja"
                     )
                 )
-                guard !Task.isCancelled else { return }
+                guard requestID == latestRequestID else { return }
                 state = .success(result)
                 displayedResult = result
                 displayedError = nil
                 TranslationNoteLogger.record(result: result)
             } catch {
-                guard !Task.isCancelled else { return }
+                guard requestID == latestRequestID else { return }
                 let failure = localizedFailureState(for: error)
                 applyFailure(failure)
             }
 
-            task = nil
-            isTranslating = false
+            if requestID == latestRequestID {
+                isTranslating = false
+            }
         }
     }
 

@@ -161,6 +161,37 @@ function AppleDownloadIcon() {
   );
 }
 
+function ThemeToggleIcon({ themeMode }) {
+  if (themeMode === "day") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.66 5.66 1.42 1.42M4.92 4.92l1.42 1.42m0 11.32-1.42 1.42m12.74-12.74 1.42-1.42M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M14.8 3.5a8 8 0 1 0 5.7 12.7A9 9 0 0 1 14.8 3.5z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M18.6 5.1 19.1 6.4 20.4 6.9 19.1 7.4 18.6 8.7 18.1 7.4 16.8 6.9 18.1 6.4z" />
+    </svg>
+  );
+}
+
 function App() {
   const [pathname, setPathname] = useState(() =>
     typeof window === "undefined" ? "/" : window.location.pathname
@@ -217,7 +248,16 @@ function App() {
     const savedLanguage = readLanguageFromCookie();
     return LANGUAGES.some((item) => item.code === savedLanguage) ? savedLanguage : "ja";
   });
+  const [themeMode, setThemeMode] = useState("night");
   const [landingPack, setLandingPack] = useState(() => FALLBACK_LANDING_PACK);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.body.dataset.theme = themeMode;
+  }, [themeMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +277,9 @@ function App() {
     setLanguage(nextLanguage);
     persistLanguageToCookie(nextLanguage);
     preloadLandingLanguagePack(nextLanguage);
+  }, []);
+  const toggleThemeMode = useCallback(() => {
+    setThemeMode((prev) => (prev === "night" ? "day" : "night"));
   }, []);
   const t = useMemo(
     () => ({
@@ -432,6 +475,8 @@ function App() {
           onLanguageChange={onLanguageChange}
           languageOptions={LANGUAGES}
           productName={productName}
+          themeMode={themeMode}
+          onToggleTheme={toggleThemeMode}
         />
       </Suspense>
     );
@@ -465,6 +510,16 @@ function App() {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className="theme-switch"
+              aria-label={themeMode === "night" ? "Switch to day mode" : "Switch to night mode"}
+              onClick={toggleThemeMode}
+            >
+              <span className="theme-switch-icon">
+                <ThemeToggleIcon themeMode={themeMode} />
+              </span>
+            </button>
           </div>
           <div className="nav-actions">
             <button

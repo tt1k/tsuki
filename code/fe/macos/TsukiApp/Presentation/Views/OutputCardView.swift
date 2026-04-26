@@ -6,7 +6,6 @@ struct OutputCardView: View {
     let outputMessage: String?
     let cardCornerRadius: CGFloat
     let uiOpacity: Double
-    @State private var isHovered = false
 
     init(
         result: TranslationResult?,
@@ -45,24 +44,15 @@ struct OutputCardView: View {
         .background {
             RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                 .fill(
-                    isHovered
-                        ? DesignTokens.ColorToken.boxHover(opacity: uiOpacity)
-                        : DesignTokens.ColorToken.boxIdle(opacity: uiOpacity)
+                    DesignTokens.ColorToken.boxIdle(opacity: uiOpacity)
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous)
                         .stroke(
-                            isHovered
-                                ? DesignTokens.ColorToken.borderHover(opacity: uiOpacity)
-                                : DesignTokens.ColorToken.borderIdle(opacity: uiOpacity),
+                            DesignTokens.ColorToken.borderIdle(opacity: uiOpacity),
                             lineWidth: DesignTokens.Size.cardBorder
                         )
                 }
-        }
-        .onHover { hovering in
-            withAnimation(DesignTokens.Motion.hover) {
-                isHovered = hovering
-            }
         }
     }
 
