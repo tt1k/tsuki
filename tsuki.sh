@@ -71,6 +71,7 @@ Usage:
   ./tsuki.sh
   ./tsuki.sh fe web <run|stop|status>
   ./tsuki.sh fe mac <run|stop|build|clean|package>
+  ./tsuki.sh be <run|stop|clean>
   ./tsuki.sh -h|--help|help
 
 Commands:
@@ -83,6 +84,9 @@ Commands:
   fe web run           Run web frontend dev server in background
   fe web stop          Stop web frontend dev server
   fe web status        Show web frontend dev server status
+  be run               Run backend service in background
+  be stop              Stop current backend service
+  be clean             Clean backend build cache
   -h, --help, help     Show help
 EOF
 }
@@ -211,6 +215,31 @@ echo "Usage: tsuki \"text to translate\""
 EOF
 
   chmod +x "$installer_path"
+}
+
+install_system_cli() {
+  local cli_source="$FE_MAC_DIR/tsuki"
+  local target_dir="/usr/local/bin"
+  local target_cli="$target_dir/tsuki"
+
+  if [[ ! -f "$cli_source" ]]; then
+    log_warn "CLI script not found at $cli_source; skipped system CLI update"
+    return
+  fi
+
+  if [[ ! -d "$target_dir" ]]; then
+    log_info "Creating $target_dir ..."
+    sudo mkdir -p "$target_dir"
+  fi
+
+  if [[ -w "$target_dir" ]]; then
+    install -m 755 "$cli_source" "$target_cli"
+  else
+    log_info "Updating system CLI at $target_cli (requires admin permission)..."
+    sudo install -m 755 "$cli_source" "$target_cli"
+  fi
+
+  log_success "Updated system CLI: $target_cli"
 }
 
 stage_dmg_background_assets() {
@@ -529,6 +558,7 @@ run_fe() {
         log_success "TsukiApp launched via app bundle: $app_dir"
       } 2>&1 | tee -a "$app_log_path"
 
+      install_system_cli
       log_info "Log saved: $app_log_path"
       ;;
     stop)
@@ -735,6 +765,190 @@ run_fe_web() {
   esac
 }
 
+run_be() {
+  local action="${1:-run}"
+  local be_app_dir="$BE_DIR/tsuki-api"
+  local be_logs_dir="$be_app_dir/.tsuki"
+  local pid_file="$be_logs_dir/tsuki-be.pid"
+  local log_file="$be_logs_dir/tsuki-be.log"
+  local be_port="5188"
+  local ready_timeout_secs="60"
+  local poll_interval_secs="0.5"
+  local port_release_timeout_secs="12"
+  local pid
+
+  if [[ ! -f "$be_app_dir/gradlew" ]]; then
+    log_error "Missing backend runner at $be_app_dir/gradlew"
+    exit 1
+  fi
+
+  is_be_running() {
+    if [[ ! -f "$pid_file" ]]; then
+      return 1
+    fi
+
+    pid="$(<"$pid_file")"
+    if [[ -z "$pid" ]]; then
+      return 1
+    fi
+
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      return 0
+    fi
+
+    return 1
+  }
+
+  is_be_port_in_use() {
+    lsof -nP -iTCP:"$be_port" -sTCP:LISTEN >/dev/null 2>&1
+  }
+
+  wait_be_port_release() {
+    local waited="0"
+    local sleep_secs="0.2"
+    local max_steps=$((port_release_timeout_secs * 5))
+
+    for ((step=1; step<=max_steps; step++)); do
+      if ! is_be_port_in_use; then
+        return 0
+      fi
+      sleep "$sleep_secs"
+      waited=$((waited + 1))
+    done
+
+    return 1
+  }
+
+  print_be_port_owners() {
+    lsof -nP -iTCP:"$be_port" -sTCP:LISTEN || true
+  }
+
+  case "$action" in
+    run)
+      mkdir -p "$be_logs_dir"
+
+      if is_be_running; then
+        log_warn "Backend is already running (pid: $pid); stopping it before restart"
+        kill "$pid" >/dev/null 2>&1 || true
+
+        for _ in 1 2 3 4 5; do
+          if kill -0 "$pid" >/dev/null 2>&1; then
+            sleep 0.2
+          else
+            break
+          fi
+        done
+
+        if kill -0 "$pid" >/dev/null 2>&1; then
+          log_warn "Backend did not stop gracefully; force killing (pid: $pid)"
+          kill -9 "$pid" >/dev/null 2>&1 || true
+        fi
+
+        rm -f "$pid_file"
+        log_info "Previous backend process stopped"
+      fi
+
+      if is_be_port_in_use; then
+        log_warn "Backend port $be_port is still in use; waiting for release..."
+        if ! wait_be_port_release; then
+          log_error "Port $be_port is still occupied after ${port_release_timeout_secs}s"
+          print_be_port_owners
+          log_error "Please stop the process above, then retry ./tsuki.sh be run"
+          exit 1
+        fi
+      fi
+
+      rm -f "$pid_file"
+      (
+        cd "$be_app_dir"
+        nohup ./gradlew :tsuki-api:bootRun >"$log_file" 2>&1 &
+        echo $! >"$pid_file"
+      )
+
+      if ! is_be_running; then
+        log_error "Failed to start backend. Check logs: $log_file"
+        exit 1
+      fi
+
+      log_info "Backend process started (pid: $pid), waiting for ready..."
+      local elapsed="0"
+      local total_steps=$((ready_timeout_secs * 2))
+
+      for ((step=1; step<=total_steps; step++)); do
+        if ! kill -0 "$pid" >/dev/null 2>&1; then
+          rm -f "$pid_file"
+          log_error "Backend process exited before ready. Check logs: $log_file"
+          exit 1
+        fi
+
+        if [[ -f "$log_file" ]]; then
+          if grep -q "Tomcat started on port" "$log_file" && grep -q "Started .* in .* seconds" "$log_file"; then
+            log_success "Backend is ready (pid: $pid)"
+            log_info "Logs: $log_file"
+            return
+          fi
+        fi
+
+        sleep "$poll_interval_secs"
+        elapsed=$((elapsed + 1))
+      done
+
+      log_error "Backend did not become ready within ${ready_timeout_secs}s. Check logs: $log_file"
+      exit 1
+      ;;
+    stop)
+      if ! is_be_running; then
+        rm -f "$pid_file"
+        log_info "Backend is not running"
+        return
+      fi
+
+      kill "$pid" >/dev/null 2>&1 || true
+
+      for _ in 1 2 3 4 5; do
+        if kill -0 "$pid" >/dev/null 2>&1; then
+          sleep 0.2
+        else
+          break
+        fi
+      done
+
+      if kill -0 "$pid" >/dev/null 2>&1; then
+        kill -9 "$pid" >/dev/null 2>&1 || true
+      fi
+
+      if is_be_port_in_use; then
+        if ! wait_be_port_release; then
+          rm -f "$pid_file"
+          log_warn "Backend process stopped, but port $be_port is still occupied"
+          print_be_port_owners
+          return
+        fi
+      fi
+
+      rm -f "$pid_file"
+      if kill -0 "$pid" >/dev/null 2>&1; then
+        log_warn "Backend stop requested, but process still exists (pid: $pid)"
+      else
+        log_success "Backend stopped"
+      fi
+      ;;
+    clean)
+      log_section "Cleaning Backend Cache"
+      (
+        cd "$be_app_dir"
+        ./gradlew clean
+      )
+      log_success "Backend build cache cleaned"
+      ;;
+    *)
+      log_error "Unknown backend action: $action"
+      print_usage
+      exit 1
+      ;;
+  esac
+}
+
 main() {
   if [[ $# -eq 0 ]]; then
     print_usage
@@ -759,6 +973,10 @@ main() {
           exit 1
           ;;
       esac
+      ;;
+    be)
+      shift
+      run_be "${1:-run}"
       ;;
     -h|--help|help)
       print_usage

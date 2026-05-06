@@ -4,6 +4,7 @@ import AppKit
 struct WordTokenView: View {
     let token: WordToken
     let index: Int
+    let onDoubleTapSearch: (String) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
 
@@ -40,6 +41,7 @@ struct WordTokenView: View {
         }
         .onTapGesture(count: 2) {
             copyTokenIfNeeded()
+            triggerDoubleTapSearchIfNeeded()
         }
         .onTapGesture {
             copyTokenIfNeeded()
@@ -69,13 +71,22 @@ struct WordTokenView: View {
     }
 
     private var isCopyable: Bool {
-        !token.furigana.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let furigana = token.furigana.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !furigana.isEmpty else { return false }
+        let surface = token.kanji.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !surface.isEmpty else { return false }
+        return containsKanjiCharacter(in: surface)
     }
 
     private func copyTokenIfNeeded() {
         guard isCopyable else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(token.kanji, forType: .string)
+    }
+
+    private func triggerDoubleTapSearchIfNeeded() {
+        guard isCopyable else { return }
+        onDoubleTapSearch(token.kanji)
     }
 
     private var shouldShowUnderline: Bool {

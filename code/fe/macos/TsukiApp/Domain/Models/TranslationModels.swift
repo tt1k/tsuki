@@ -6,6 +6,23 @@ struct TranslationRequest {
     let apiKey: String
     let sourceLang: String
     let targetLang: String
+    let useCustomModel: Bool
+
+    init(
+        sourceText: String,
+        provider: String,
+        apiKey: String,
+        sourceLang: String,
+        targetLang: String,
+        useCustomModel: Bool = false
+    ) {
+        self.sourceText = sourceText
+        self.provider = provider
+        self.apiKey = apiKey
+        self.sourceLang = sourceLang
+        self.targetLang = targetLang
+        self.useCustomModel = useCustomModel
+    }
 
     var normalizedSourceText: String {
         let trimmed = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)

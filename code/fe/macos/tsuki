@@ -6,7 +6,7 @@ usage() {
   cat <<'EOF'
 Usage:
   tsuki "text to translate"
-  tsuki re
+  tsuki --recap
 EOF
 }
 
@@ -45,19 +45,42 @@ def load_entries(database_path: str):
 
     conn = sqlite3.connect(database_path)
     try:
-        rows = conn.execute(
-            """
-            SELECT
-              trim(json_extract(result_json, '$.headwordKanji')) AS headword,
-              trim(coalesce(json_extract(result_json, '$.headwordKana'), '')) AS headword_kana,
-              trim(json_extract(result_json, '$.meaning')) AS meaning,
-              updated_at
-            FROM translation_cache
-            WHERE json_extract(result_json, '$.headwordKanji') IS NOT NULL
-              AND json_extract(result_json, '$.meaning') IS NOT NULL
-            ORDER BY updated_at DESC
-            """
-        ).fetchall()
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(translation_cache)").fetchall()
+        }
+
+        if {"kanji", "kana", "meaning"}.issubset(columns):
+            order_column = '"update"' if "update" in columns else "updated_at"
+            rows = conn.execute(
+                f"""
+                SELECT
+                  trim(kanji) AS headword,
+                  trim(coalesce(kana, '')) AS headword_kana,
+                  trim(meaning) AS meaning,
+                  {order_column}
+                FROM translation_cache
+                WHERE kanji IS NOT NULL
+                  AND meaning IS NOT NULL
+                ORDER BY {order_column} DESC
+                """
+            ).fetchall()
+        elif "result_json" in columns:
+            rows = conn.execute(
+                """
+                SELECT
+                  trim(json_extract(result_json, '$.headwordKanji')) AS headword,
+                  trim(coalesce(json_extract(result_json, '$.headwordKana'), '')) AS headword_kana,
+                  trim(json_extract(result_json, '$.meaning')) AS meaning,
+                  updated_at
+                FROM translation_cache
+                WHERE json_extract(result_json, '$.headwordKanji') IS NOT NULL
+                  AND json_extract(result_json, '$.meaning') IS NOT NULL
+                ORDER BY updated_at DESC
+                """
+            ).fetchall()
+        else:
+            raise sqlite3.Error("unsupported translation_cache schema")
     except sqlite3.Error as exc:
         print(f"Error: failed to read sqlite data: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -102,16 +125,16 @@ def ask_question(index: int, total: int, headword: str, headword_kana: str, corr
     selected_choice = choices[selected_index]
 
     if handled_inline:
-        return 1 if selected_choice == correct else 0
+        return selected_choice == correct
 
     if selected_choice == correct:
         print(paint("Correct!", ANSI_GREEN, ANSI_BOLD))
         wait_for_next_question()
-        return 1
+        return True
 
     print(paint(f"Wrong. Correct option: {correct_index + 1}", ANSI_RED, ANSI_BOLD))
     wait_for_next_question()
-    return 0
+    return False
 
 
 def wait_for_next_question():
@@ -350,8 +373,79 @@ def char_display_width(char: str):
 
 def format_word_line(headword: str, headword_kana: str):
     if headword_kana:
-        return f"{headword}「{headword_kana}」"
-    return f"{headword}「」"
+        return f"{headword} ({headword_kana})"
+    return f"{headword}"
+
+
+def pad_to_width(text: str, width: int):
+    gap = max(0, width - display_width(text))
+    return text + (" " * gap)
+
+
+def build_progress_bar(score: int, total: int, width: int = 10):
+    filled = int(round((score / total) * width)) if total > 0 else 0
+    filled = max(0, min(width, filled))
+    return ("█" * filled, "░" * (width - filled))
+
+
+def build_word_box(title: str, title_style, items, box_width: int):
+    inner_width = max(10, box_width)
+    title_line = truncate_to_width(title, inner_width)
+    lines = [
+        paint(pad_to_width(title_line, inner_width), *title_style),
+        paint("─" * inner_width, ANSI_DIM),
+    ]
+
+    if items:
+        left_width = max(display_width(format_word_line(word, kana)) for word, kana, _ in items)
+        left_width = min(left_width, max(8, inner_width - 4))
+        meaning_width = max(6, inner_width - left_width - 3)
+
+        for word, kana, meaning in items:
+            word_text = truncate_to_width(format_word_line(word, kana), left_width)
+            meaning_text = truncate_to_width(meaning, meaning_width)
+            row_plain = f"{pad_to_width(word_text, left_width)} - {meaning_text}"
+            row_plain = pad_to_width(row_plain, inner_width)
+
+            prefix = pad_to_width(word_text, left_width)
+            suffix = f" - {meaning_text}"
+            word_color = ANSI_GREEN if "Correct" in title else ANSI_RED
+            styled_row = paint(prefix, ANSI_BOLD, word_color) + paint(suffix, ANSI_DIM)
+            row = styled_row + (" " * max(0, inner_width - display_width(row_plain)))
+            lines.append(row)
+    else:
+        empty_line = pad_to_width("(none)", inner_width)
+        lines.append(paint(empty_line, ANSI_DIM))
+
+    lines.append(paint("─" * inner_width, ANSI_DIM))
+    return lines
+
+
+def render_report(correct_words, wrong_words, score: int, total: int):
+    columns, _ = get_terminal_size()
+    percent = int(round((score / total) * 100)) if total > 0 else 0
+    separator_width = min(max(columns, 20), 72)
+    print(paint("\nTsuki Review", ANSI_CYAN, ANSI_BOLD))
+    print(paint("─" * separator_width, ANSI_DIM))
+
+    bar_ok, bar_rest = build_progress_bar(score, total, 10)
+    bar_text = f"[{bar_ok}{bar_rest}]"
+    summary_prefix = f"Accuracy: {score}/{total} ({percent}%) "
+    print(summary_prefix + paint(f"[{bar_ok}", ANSI_GREEN) + paint(f"{bar_rest}]", ANSI_DIM) + f" {percent}%")
+
+    print("")
+
+    box_width = separator_width
+    correct_box = build_word_box("Correct ✓", (ANSI_GREEN, ANSI_BOLD), correct_words, box_width)
+    wrong_box = build_word_box("Wrong ✗", (ANSI_RED, ANSI_BOLD), wrong_words, box_width)
+
+    for line in correct_box:
+        print(line)
+    print("")
+    for line in wrong_box:
+        print(line)
+
+    print("")
 
 
 def main():
@@ -360,18 +454,24 @@ def main():
     questions = select_questions(entries)
 
     score = 0
+    correct_words = []
+    wrong_words = []
     print(f"Tsuki Review: {QUESTION_COUNT} questions")
     print("Select the correct meaning for each word.")
 
     try:
         for idx, (headword, headword_kana, meaning) in enumerate(questions, start=1):
-            score += ask_question(idx, QUESTION_COUNT, headword, headword_kana, meaning, entries)
+            is_correct = ask_question(idx, QUESTION_COUNT, headword, headword_kana, meaning, entries)
+            if is_correct:
+                score += 1
+                correct_words.append((headword, headword_kana, meaning))
+            else:
+                wrong_words.append((headword, headword_kana, meaning))
     except (EOFError, KeyboardInterrupt):
         print("\nReview interrupted.")
         sys.exit(1)
 
-    percent = int(round((score / QUESTION_COUNT) * 100))
-    print(f"\nResult: {score}/{QUESTION_COUNT} ({percent}%)")
+    render_report(correct_words, wrong_words, score, QUESTION_COUNT)
 
 
 def select_questions(entries):
@@ -521,7 +621,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
   exit 0
 fi
 
-if [[ "${1:-}" == "re" ]]; then
+if [[ "${1:-}" == "--recap" ]]; then
   run_review
   exit 0
 fi

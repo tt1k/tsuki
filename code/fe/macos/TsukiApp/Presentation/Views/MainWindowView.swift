@@ -34,7 +34,11 @@ struct MainWindowView: View {
                 result: viewModel.result,
                 outputTitle: viewModel.outputTitle,
                 outputMessage: viewModel.outputMessage,
-                uiOpacity: settingsStore.windowGlassOpacity
+                uiOpacity: settingsStore.windowGlassOpacity,
+                onTokenDoubleTapSearch: { tokenText in
+                    viewModel.inputText = tokenText
+                    viewModel.translate()
+                }
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

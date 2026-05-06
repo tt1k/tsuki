@@ -129,7 +129,8 @@ final class MainViewModel: ObservableObject {
                         provider: settingsStore.provider,
                         apiKey: settingsStore.apiKey(for: settingsStore.provider),
                         sourceLang: settingsStore.language,
-                        targetLang: "ja"
+                        targetLang: "ja",
+                        useCustomModel: settingsStore.useCustomModel
                     )
                 )
                 guard requestID == latestRequestID else { return }
@@ -139,6 +140,9 @@ final class MainViewModel: ObservableObject {
                 TranslationNoteLogger.record(result: result)
             } catch {
                 guard requestID == latestRequestID else { return }
+                AppEventLogger.log(
+                    "TRANSLATION_FAIL provider=\(settingsStore.provider) sourceLang=\(settingsStore.language) code=\(errorCodeForLog(error)) reason=\(error.localizedDescription) input=\(text)"
+                )
                 let failure = localizedFailureState(for: error)
                 applyFailure(failure)
             }
@@ -258,17 +262,39 @@ final class MainViewModel: ObservableObject {
 
     private func localizedText(en: String, zhCN: String, zhTW: String, ja: String) -> String {
         switch settingsStore.language {
-        case "zh-CN": return zhCN
-        case "zh-TW": return zhTW
+        case "cn": return zhCN
+        case "tw": return zhTW
         case "ja": return ja
         default: return en
         }
     }
 
+    private func errorCodeForLog(_ error: Error) -> String {
+        if let providerError = error as? CompletionsDictionaryHelper.ProviderError {
+            switch providerError {
+            case .missingAPIKey:
+                return "missing_api_key"
+            case .invalidResponse:
+                return "invalid_response"
+            case let .httpError(_, statusCode, _):
+                return "http_\(statusCode)"
+            }
+        }
+
+        if let routerError = error as? TranslateRouterProvider.ProviderError {
+            switch routerError {
+            case .unsupportedProvider:
+                return "unsupported_provider"
+            }
+        }
+
+        return "unknown"
+    }
+
     private static func defaultInputText(for language: String) -> String {
         switch language {
-        case "zh-CN": "我能帮什么忙吗"
-        case "zh-TW": "我們該從哪裡開始"
+        case "cn": "我能帮什么忙吗"
+        case "tw": "我們該從哪裡開始"
         case "ja": "どこから始めますか"
         case "ko": "어디서부터 시작할까요"
         case "es": "¿Por dónde empezamos"
@@ -280,7 +306,7 @@ final class MainViewModel: ObservableObject {
     }
 
     private static func isDefaultInputText(_ text: String) -> Bool {
-        let presets = ["zh-CN", "zh-TW", "en", "ja", "ko", "es", "fr", "de", "ru"].map(defaultInputText(for:))
+        let presets = ["cn", "tw", "en", "ja", "ko", "es", "fr", "de", "ru"].map(defaultInputText(for:))
         return presets.contains(text)
     }
 

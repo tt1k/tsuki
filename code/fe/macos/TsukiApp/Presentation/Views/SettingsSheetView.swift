@@ -5,7 +5,6 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     case general
     case appearance
     case database
-    case shortcuts
     case about
 
     var id: String { rawValue }
@@ -15,7 +14,6 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .appearance: "circle.lefthalf.filled"
         case .database: "cylinder"
-        case .shortcuts: "pencil.circle"
         case .about: "info.circle"
         }
     }
@@ -30,8 +28,8 @@ private enum ProviderOption: String, CaseIterable {
 }
 
 private enum LanguageOption: String, CaseIterable {
-    case chinese = "zh-CN"
-    case chineseTraditional = "zh-TW"
+    case chinese = "cn"
+    case chineseTraditional = "tw"
     case english = "en"
     case japanese = "ja"
     case korean = "ko"
@@ -126,6 +124,11 @@ struct SettingsSheetView: View {
         .onChangeCompat(of: settingsStore.language) { _ in
             if hasInitializedLogs {
                 AppEventLogger.log("Settings changed: language=\(settingsStore.language)")
+            }
+        }
+        .onChangeCompat(of: settingsStore.useCustomModel) { _ in
+            if hasInitializedLogs {
+                AppEventLogger.log("Settings changed: useCustomModel=\(settingsStore.useCustomModel)")
             }
         }
         .onChangeCompat(of: settingsStore.appearanceMode) { _ in
@@ -286,8 +289,6 @@ struct SettingsSheetView: View {
             appearanceTabContent
         case .database:
             databaseTabContent
-        case .shortcuts:
-            shortcutsTabContent
         case .about:
             aboutTabContent
         }
@@ -329,6 +330,19 @@ struct SettingsSheetView: View {
                 .pickerStyle(.menu)
                 .frame(width: 120)
                 .tint(DesignTokens.ColorToken.textMain)
+            }
+
+            HStack {
+                Text(localizedText(en: "Use Custom Model", zhCN: "使用自定义模型", zhTW: "使用自訂模型", ja: "カスタムモデルを使用"))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Toggle("", isOn: $settingsStore.useCustomModel)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(DesignTokens.ColorToken.textDim)
             }
 
             HStack {
@@ -666,22 +680,6 @@ struct SettingsSheetView: View {
         }
     }
 
-    private var shortcutsTabContent: some View {
-        VStack(spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(localizedText(en: "Translate", zhCN: "翻译", zhTW: "翻譯", ja: "翻訳"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                Spacer()
-
-                Text("Enter / Cmd+Enter")
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
-                    .foregroundStyle(DesignTokens.ColorToken.textMain)
-            }
-        }
-    }
-
     private var aboutTabContent: some View {
         VStack(spacing: 10) {
             infoRow(title: localizedText(en: "App", zhCN: "应用", zhTW: "應用", ja: "アプリ"), value: appDisplayName)
@@ -706,9 +704,9 @@ struct SettingsSheetView: View {
         switch settingsStore.language {
         case "en":
             return "Tsuki Translate"
-        case "zh-CN":
+        case "cn":
             return "言叶之月"
-        case "zh-TW":
+        case "tw":
             return "言葉之月"
         default:
             return "月の言葉"
@@ -785,7 +783,7 @@ struct SettingsSheetView: View {
 
     private var opacityTitle: String {
         switch settingsStore.language {
-        case "zh-CN", "zh-TW":
+        case "cn", "tw":
             return "透明度"
         case "ja":
             return "透明度"
@@ -1030,8 +1028,6 @@ struct SettingsSheetView: View {
             return localizedText(en: "Appearance", zhCN: "外观", zhTW: "外觀", ja: "外観")
         case .database:
             return localizedText(en: "Database", zhCN: "数据库", zhTW: "資料庫", ja: "データベース")
-        case .shortcuts:
-            return localizedText(en: "Shortcuts", zhCN: "快捷键", zhTW: "快捷鍵", ja: "ショートカット")
         case .about:
             return localizedText(en: "About", zhCN: "关于", zhTW: "關於", ja: "アプリについて")
         }
@@ -1039,7 +1035,7 @@ struct SettingsSheetView: View {
 
     private func languageTitle(_ option: LanguageOption) -> String {
         switch settingsStore.language {
-        case "zh-CN":
+        case "cn":
             switch option {
             case .chinese: return "中文"
             case .chineseTraditional: return "繁體中文"
@@ -1051,7 +1047,7 @@ struct SettingsSheetView: View {
             case .german: return "德语"
             case .russian: return "俄语"
             }
-        case "zh-TW":
+        case "tw":
             switch option {
             case .chinese: return "簡體中文"
             case .chineseTraditional: return "繁體中文"
@@ -1082,13 +1078,13 @@ struct SettingsSheetView: View {
 
     private func appearanceModeTitle(_ option: AppearanceMode) -> String {
         switch settingsStore.language {
-        case "zh-CN":
+        case "cn":
             switch option {
             case .dark: return "深色"
             case .light: return "浅色"
             case .auto: return "跟随系统"
             }
-        case "zh-TW":
+        case "tw":
             switch option {
             case .dark: return "深色"
             case .light: return "淺色"
@@ -1111,8 +1107,8 @@ struct SettingsSheetView: View {
 
     private func localizedText(en: String, zhCN: String, zhTW: String, ja: String) -> String {
         switch settingsStore.language {
-        case "zh-CN": return zhCN
-        case "zh-TW": return zhTW
+        case "cn": return zhCN
+        case "tw": return zhTW
         case "ja": return ja
         default: return en
         }

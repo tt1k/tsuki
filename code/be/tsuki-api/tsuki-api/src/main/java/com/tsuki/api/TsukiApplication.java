@@ -4,8 +4,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication(scanBasePackages = "com.tsuki")
-public class TsukiApiApplication {
+public class TsukiApplication {
     public static void main(String[] args) {
-        SpringApplication.run(TsukiApiApplication.class, args);
+        SpringApplication.run(TsukiApplication.class, args);
     }
 }

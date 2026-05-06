@@ -78,8 +78,8 @@ async function collectFilesFromDirectoryHandle(directoryHandle, parentPath = "")
 }
 
 const LANGUAGES = [
-  { code: "zh-CN", label: "中文" },
-  { code: "zh-TW", label: "繁體中文" },
+  { code: "cn", label: "中文" },
+  { code: "tw", label: "繁體中文" },
   { code: "en", label: "English" },
   { code: "ja", label: "日本語" },
   { code: "ko", label: "Korean" },
@@ -91,15 +91,15 @@ const LANGUAGES = [
 
 const PRODUCT_NAMES = {
   ja: "月の言葉",
-  "zh-CN": "言叶之月",
-  "zh-TW": "言葉之月",
+  "cn": "言叶之月",
+  "tw": "言葉之月",
   en: "Tsuki Translate"
 };
 
 const PRODUCT_IMAGES = {
   ja: "/main/main_ja.png",
-  "zh-CN": "/main/main_zh-CN.png",
-  "zh-TW": "/main/main_zh-TW.png",
+  "cn": "/main/main_cn.png",
+  "tw": "/main/main_tw.png",
   en: "/main/main_en.png",
   ko: "/main/main_ko.png",
   es: "/main/main_es.png",
@@ -110,8 +110,8 @@ const PRODUCT_IMAGES = {
 
 const MARKDOWN_IMAGES = {
   ja: "/markdown/markdown_ja.png",
-  "zh-CN": "/markdown/markdown_zh-CN.png",
-  "zh-TW": "/markdown/markdown_zh-TW.png",
+  "cn": "/markdown/markdown_cn.png",
+  "tw": "/markdown/markdown_tw.png",
   en: "/markdown/markdown_en.png",
   ko: "/markdown/markdown_kr.png",
   es: "/markdown/markdown_es.png",

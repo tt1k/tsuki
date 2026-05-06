@@ -93,7 +93,7 @@
 
 ### 5.2 支持集
 - provider：`deepseek/openai/gemini/qwen/kimi`
-- language：`zh-CN/zh-TW/en/ja/ko/es/fr/de/ru`
+- language：`cn/tw/en/ja/ko/es/fr/de/ru`
 
 ### 5.3 API Key 交互
 - 默认掩码显示（前 8 位 + `*`）。

@@ -1,8 +1,8 @@
 import jaPack from "./ja";
 
 const LANGUAGE_LOADERS = {
-  "zh-CN": () => import("./zh-CN"),
-  "zh-TW": () => import("./zh-TW"),
+  "cn": () => import("./cn"),
+  "tw": () => import("./tw"),
   en: () => import("./en"),
   ja: () => Promise.resolve({ default: jaPack }),
   ko: () => import("./ko"),

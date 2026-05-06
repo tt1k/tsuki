@@ -295,8 +295,8 @@ struct DatabaseEditorSheetView: View {
 
     private func localizedText(en: String, zhCN: String, zhTW: String, ja: String) -> String {
         switch language {
-        case "zh-CN": return zhCN
-        case "zh-TW": return zhTW
+        case "cn": return zhCN
+        case "tw": return zhTW
         case "ja": return ja
         default: return en
         }

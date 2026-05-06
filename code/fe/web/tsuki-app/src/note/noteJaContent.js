@@ -67,7 +67,7 @@ export const NOTE_UI_COPY_BY_LANGUAGE = {
     fallbackHeadwordKana: "",
     fallbackMeaning: ""
   },
-  "zh-CN": {
+  "cn": {
     pageTitle: "笔记",
     pageSub: "用 Tsuki 风格查看文本输出效果",
     inputLabel: "输入",
@@ -78,7 +78,7 @@ export const NOTE_UI_COPY_BY_LANGUAGE = {
     fallbackHeadwordKana: "",
     fallbackMeaning: ""
   },
-  "zh-TW": {
+  "tw": {
     pageTitle: "筆記",
     pageSub: "用 Tsuki 風格查看文字輸出效果",
     inputLabel: "輸入",

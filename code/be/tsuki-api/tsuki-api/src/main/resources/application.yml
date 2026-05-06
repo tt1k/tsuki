@@ -1,6 +1,12 @@
 spring:
   application:
     name: tsuki-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tsuki
+    username: umineko
+    password:
+  jackson:
+    property-naming-strategy: SNAKE_CASE
 
 server:
-  port: 8080
+  port: 5188

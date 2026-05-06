@@ -35,9 +35,9 @@ final class SettingsStore: ObservableObject {
     private struct ConfigFile: Codable {
         var provider: String
         var language: String
+        var useCustomModel: Bool
         var appearanceMode: String
         var windowGlassOpacity: Double
-        var shortcutEnabled: Bool
         var dockIconVisible: Bool
         var forceTopRightOnLaunch: Bool
         var apiKeys: [String: String]
@@ -45,9 +45,9 @@ final class SettingsStore: ObservableObject {
         enum CodingKeys: String, CodingKey {
             case provider
             case language
+            case useCustomModel
             case appearanceMode
             case windowGlassOpacity
-            case shortcutEnabled
             case dockIconVisible
             case forceTopRightOnLaunch
             case apiKeys
@@ -56,18 +56,18 @@ final class SettingsStore: ObservableObject {
         init(
             provider: String,
             language: String,
+            useCustomModel: Bool,
             appearanceMode: String,
             windowGlassOpacity: Double,
-            shortcutEnabled: Bool,
             dockIconVisible: Bool,
             forceTopRightOnLaunch: Bool,
             apiKeys: [String: String]
         ) {
             self.provider = provider
             self.language = language
+            self.useCustomModel = useCustomModel
             self.appearanceMode = appearanceMode
             self.windowGlassOpacity = windowGlassOpacity
-            self.shortcutEnabled = shortcutEnabled
             self.dockIconVisible = dockIconVisible
             self.forceTopRightOnLaunch = forceTopRightOnLaunch
             self.apiKeys = apiKeys
@@ -77,11 +77,11 @@ final class SettingsStore: ObservableObject {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             provider = try container.decode(String.self, forKey: .provider)
             language = try container.decode(String.self, forKey: .language)
+            useCustomModel = try container.decodeIfPresent(Bool.self, forKey: .useCustomModel) ?? Defaults.useCustomModel
             appearanceMode = try container.decodeIfPresent(String.self, forKey: .appearanceMode) ?? Defaults.appearanceMode.rawValue
             windowGlassOpacity = Self.clampWindowGlassOpacity(
                 try container.decodeIfPresent(Double.self, forKey: .windowGlassOpacity) ?? Defaults.windowGlassOpacity
             )
-            shortcutEnabled = try container.decode(Bool.self, forKey: .shortcutEnabled)
             dockIconVisible = try container.decodeIfPresent(Bool.self, forKey: .dockIconVisible) ?? Defaults.dockIconVisible
             forceTopRightOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .forceTopRightOnLaunch) ?? Defaults.forceTopRightOnLaunch
             apiKeys = try container.decodeIfPresent([String: String].self, forKey: .apiKeys) ?? [:]
@@ -95,9 +95,9 @@ final class SettingsStore: ObservableObject {
     private enum Defaults {
         static let provider = "deepseek"
         static let language = "en"
+        static let useCustomModel = false
         static let appearanceMode: AppearanceMode = .dark
         static let windowGlassOpacity = 0.86
-        static let shortcutEnabled = true
         static let dockIconVisible = true
         static let forceTopRightOnLaunch = true
     }
@@ -106,7 +106,7 @@ final class SettingsStore: ObservableObject {
         "deepseek", "openai", "gemini", "qwen", "kimi"
     ]
     private let supportedLanguages: Set<String> = [
-        "zh-CN", "zh-TW", "en", "ja", "ko", "es", "fr", "de", "ru"
+        "cn", "tw", "en", "ja", "ko", "es", "fr", "de", "ru"
     ]
 
     @Published var provider: String {
@@ -114,6 +114,10 @@ final class SettingsStore: ObservableObject {
     }
 
     @Published var language: String {
+        didSet { saveIfNeeded() }
+    }
+
+    @Published var useCustomModel: Bool {
         didSet { saveIfNeeded() }
     }
 
@@ -130,10 +134,6 @@ final class SettingsStore: ObservableObject {
             }
             saveIfNeeded()
         }
-    }
-
-    @Published var shortcutEnabled: Bool {
-        didSet { saveIfNeeded() }
     }
 
     @Published var dockIconVisible: Bool {
@@ -157,9 +157,9 @@ final class SettingsStore: ObservableObject {
         self.configURL = Self.makeConfigURL(fileManager: fileManager)
         self.provider = Defaults.provider
         self.language = Defaults.language
+        self.useCustomModel = Defaults.useCustomModel
         self.appearanceMode = Defaults.appearanceMode
         self.windowGlassOpacity = Defaults.windowGlassOpacity
-        self.shortcutEnabled = Defaults.shortcutEnabled
         self.dockIconVisible = Defaults.dockIconVisible
         self.forceTopRightOnLaunch = Defaults.forceTopRightOnLaunch
         self.apiKeys = [:]
@@ -187,9 +187,9 @@ final class SettingsStore: ObservableObject {
         provider = supportedProviders.contains(snapshot.provider) ? snapshot.provider : Defaults.provider
         let normalizedLanguage = Self.normalizeLanguageCode(snapshot.language)
         language = supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language
+        useCustomModel = snapshot.useCustomModel
         appearanceMode = AppearanceMode(rawValue: snapshot.appearanceMode) ?? Defaults.appearanceMode
         windowGlassOpacity = Self.clampWindowGlassOpacity(snapshot.windowGlassOpacity)
-        shortcutEnabled = snapshot.shortcutEnabled
         dockIconVisible = snapshot.dockIconVisible
         forceTopRightOnLaunch = snapshot.forceTopRightOnLaunch
         apiKeys = snapshot.apiKeys.filter { supportedProviders.contains($0.key) }
@@ -206,9 +206,9 @@ final class SettingsStore: ObservableObject {
         let config = ConfigFile(
             provider: supportedProviders.contains(provider) ? provider : Defaults.provider,
             language: supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language,
+            useCustomModel: useCustomModel,
             appearanceMode: appearanceMode.rawValue,
             windowGlassOpacity: Self.clampWindowGlassOpacity(windowGlassOpacity),
-            shortcutEnabled: shortcutEnabled,
             dockIconVisible: dockIconVisible,
             forceTopRightOnLaunch: forceTopRightOnLaunch,
             apiKeys: apiKeys

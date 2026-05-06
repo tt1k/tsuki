@@ -836,7 +836,7 @@ body[data-theme="day"] .note-page-wrap {
   --note-text-dim: #576374;
   --note-window-bg: #f5f7fa;
   --note-box-idle: rgba(255, 255, 255, 0.94);
-  --note-box-hover: rgba(255, 255, 255, 1);
+  --note-box-hover: rgba(226, 234, 244, 0.96);
   --note-border-idle: rgba(23, 33, 43, 0.12);
   --note-border-hover: rgba(23, 33, 43, 0.24);
   --note-input-bg: #ffffff;

@@ -332,8 +332,8 @@ struct CompletionsDictionaryHelper: TranslatorProvider {
 
     private func meaningLanguageLabel(from code: String) -> String {
         switch code {
-        case "zh-CN": return "Simplified Chinese"
-        case "zh-TW": return "Traditional Chinese"
+        case "cn": return "Simplified Chinese"
+        case "tw": return "Traditional Chinese"
         case "ja": return "Japanese"
         case "ko": return "Korean"
         case "es": return "Spanish"

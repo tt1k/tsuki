@@ -50,15 +50,15 @@ const UI_COPY = {
     errDropFolder: "Markdown を含むフォルダをドロップしてください",
     errNoMarkdown: "Markdown ファイルが見つかりません"
   },
-  "zh-CN": {
-    title: getMdEntryHeading("zh-CN"),
+  "cn": {
+    title: getMdEntryHeading("cn"),
     subtitle: "目录请在主页入口拖入，这里只负责渲染与浏览",
     themeAria: "theme mode",
     themeLight: "白天",
     themeDark: "黑夜",
     emptyHint: "把文件夹拖到这里",
-    emptySub: getMdEntrySub("zh-CN"),
-    emptyCta: getMdEntryCta("zh-CN"),
+    emptySub: getMdEntrySub("cn"),
+    emptyCta: getMdEntryCta("cn"),
     controlHeadingSize: "文字大小",
     controlImageWidth: "图片宽度",
     controlImageAlign: "图片位置",
@@ -89,15 +89,15 @@ const UI_COPY = {
     errDropFolder: "请拖入包含 Markdown 的文件夹",
     errNoMarkdown: "未检测到 Markdown 文件"
   },
-  "zh-TW": {
-    title: getMdEntryHeading("zh-TW"),
+  "tw": {
+    title: getMdEntryHeading("tw"),
     subtitle: "目錄請在首頁入口拖入，這裡只負責渲染與瀏覽",
     themeAria: "theme mode",
     themeLight: "白天",
     themeDark: "黑夜",
     emptyHint: "把資料夾拖到這裡",
-    emptySub: getMdEntrySub("zh-TW"),
-    emptyCta: getMdEntryCta("zh-TW"),
+    emptySub: getMdEntrySub("tw"),
+    emptyCta: getMdEntryCta("tw"),
     controlHeadingSize: "文字大小",
     controlImageWidth: "圖片寬度",
     controlImageAlign: "圖片位置",

@@ -6,19 +6,22 @@ struct OutputCardView: View {
     let outputMessage: String?
     let cardCornerRadius: CGFloat
     let uiOpacity: Double
+    let onTokenDoubleTapSearch: (String) -> Void
 
     init(
         result: TranslationResult?,
         outputTitle: String?,
         outputMessage: String?,
         cardCornerRadius: CGFloat = DesignTokens.Size.cardRadius,
-        uiOpacity: Double = 1
+        uiOpacity: Double = 1,
+        onTokenDoubleTapSearch: @escaping (String) -> Void = { _ in }
     ) {
         self.result = result
         self.outputTitle = outputTitle
         self.outputMessage = outputMessage
         self.cardCornerRadius = cardCornerRadius
         self.uiOpacity = uiOpacity
+        self.onTokenDoubleTapSearch = onTokenDoubleTapSearch
     }
 
     var body: some View {
@@ -34,7 +37,11 @@ struct OutputCardView: View {
 
             FlowLayout(spacing: DesignTokens.Size.flowColumnGap, rowSpacing: DesignTokens.Size.flowRowGap) {
                 ForEach(Array((result?.tokens ?? []).enumerated()), id: \.offset) { index, token in
-                    WordTokenView(token: token, index: index)
+                    WordTokenView(
+                        token: token,
+                        index: index,
+                        onDoubleTapSearch: onTokenDoubleTapSearch
+                    )
                 }
             }
         }
