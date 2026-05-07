@@ -767,7 +767,7 @@ run_fe_web() {
 
 run_be() {
   local action="${1:-run}"
-  local be_app_dir="$BE_DIR/tsuki-api"
+  local be_app_dir="$BE_DIR/bg-tsuki"
   local be_logs_dir="$be_app_dir/.tsuki"
   local pid_file="$be_logs_dir/tsuki-be.pid"
   local log_file="$be_logs_dir/tsuki-be.log"
