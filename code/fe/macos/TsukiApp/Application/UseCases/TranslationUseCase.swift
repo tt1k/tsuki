@@ -8,13 +8,15 @@ struct TranslationUseCase {
     func execute(request: TranslationRequest) async throws -> TranslationResult {
         if let cached = await translationCacheStore.load(for: request) {
             AppEventLogger.log(
-                "CACHE_HIT \(request.sourceLang)->\(request.targetLang) \(request.normalizedSourceText)"
+                "CACHE_HIT \(request.sourceLang)->\(request.targetLang) \(request.normalizedSourceText)",
+                category: .cache
             )
             return cached
         }
 
         AppEventLogger.log(
-            "CACHE_MISS \(request.sourceLang)->\(request.targetLang) \(request.normalizedSourceText)"
+            "CACHE_MISS \(request.sourceLang)->\(request.targetLang) \(request.normalizedSourceText)",
+            category: .cache
         )
 
         let payload = try await translatorProvider.translate(request)

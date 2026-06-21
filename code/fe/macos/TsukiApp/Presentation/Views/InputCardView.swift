@@ -9,6 +9,8 @@ struct InputCardView: View {
     @Binding var inputText: String
     let isTranslating: Bool
     let onTranslate: () -> Void
+    let isWindowPinned: Bool
+    let onToggleWindowPinned: () -> Void
     let onSettings: () -> Void
     let onInputOverflow: () -> Void
     let onInputWithinLimit: () -> Void
@@ -17,6 +19,7 @@ struct InputCardView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
     @State private var isHovered = false
     @State private var inputLocked = false
+    @State private var isSettingsWindowOpen = false
     @State private var shouldMoveCaretOnFocus = false
 
     var body: some View {
@@ -50,7 +53,8 @@ struct InputCardView: View {
 
             HStack(spacing: 8) {
                 translateButton
-                iconButton(symbol: "gearshape", color: DesignTokens.ColorToken.textDim, action: onSettings)
+                settingsButton
+                pinButton
             }
             .padding(.trailing, actionInset)
         }
@@ -65,6 +69,10 @@ struct InputCardView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .triggerTranslate)) { _ in
             lockAndDefocusInput()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .settingsWindowVisibilityChanged)) { notification in
+            guard let isOpen = notification.object as? Bool else { return }
+            isSettingsWindowOpen = isOpen
         }
         .onChangeCompat(of: focused) { isFocused in
             guard isFocused, shouldMoveCaretOnFocus else { return }
@@ -113,7 +121,11 @@ struct InputCardView: View {
     }
 
     private var inputTrailingInset: CGFloat {
-        actionInset + 56 + inputActionGap
+        actionInset + actionButtonsWidth + inputActionGap
+    }
+
+    private var actionButtonsWidth: CGFloat {
+        (24 * 3) + (8 * 2)
     }
 
     private var cardBackground: some View {
@@ -134,11 +146,11 @@ struct InputCardView: View {
             }
     }
 
-    private func iconButton(symbol: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
+    private var settingsButton: some View {
+        Button(action: onSettings) {
+            Image(systemName: isSettingsWindowOpen ? "gear.circle.fill" : "gear.circle")
                 .font(DesignTokens.FontToken.icon)
-                .foregroundStyle(color)
+                .foregroundStyle(isSettingsWindowOpen ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
                 .frame(width: 24, height: 24)
                 .background(
                     DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity),
@@ -146,6 +158,8 @@ struct InputCardView: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Open settings")
+        .accessibilityValue(isSettingsWindowOpen ? "Open" : "Closed")
     }
 
     private var translateButton: some View {
@@ -167,6 +181,32 @@ struct InputCardView: View {
         .buttonStyle(.plain)
         .disabled(isTranslating)
         .opacity(1)
+        .accessibilityLabel(isTranslating ? "Translating" : "Translate")
+    }
+
+    private var pinButton: some View {
+        Button(action: onToggleWindowPinned) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(pinButtonFill)
+
+                Image(systemName: isWindowPinned ? "pin.circle.fill" : "pin.circle")
+                    .font(DesignTokens.FontToken.icon)
+                    .foregroundStyle(isWindowPinned ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
+            }
+            .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isWindowPinned ? "Unpin window" : "Pin window")
+        .accessibilityValue(isWindowPinned ? "Pinned" : "Not pinned")
+    }
+
+    private var pinButtonFill: Color {
+        if isWindowPinned {
+            return DesignTokens.ColorToken.borderHover(opacity: settingsStore.windowGlassOpacity)
+        }
+
+        return DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
     }
 
     private func handleTranslateTapped() {

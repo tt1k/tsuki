@@ -35,7 +35,7 @@
 - `Domain/Protocols/Providers.swift`：`TranslatorProvider` 协议。
 
 5) Infrastructure 层
-- 网络：`Infrastructure/Network/TranslateRouterProvider.swift`、`Infrastructure/Network/Impl/DeepSeekDictionaryProvider.swift`
+- 网络：`Infrastructure/Network/TranslateRouterProvider.swift`、`Infrastructure/Network/LocalDictionaryProvider.swift`、`Infrastructure/Network/Impl/*DictionaryProvider.swift`
 - 日志：`Infrastructure/Logging/AppEventLogger.swift`
 - 翻译笔记：`Infrastructure/Logging/TranslationNoteLogger.swift`
 - 输出截图：`Infrastructure/Logging/OutputCardScreenshotWriter.swift`
@@ -58,7 +58,7 @@
 1. 用户触发来源：按钮 / `Enter` / `Cmd+Enter` / `tsuki://translate?text=...`。
 2. `MainViewModel.translate()` 校验空输入、25 字上限、并发状态。
 3. 读取 `SettingsStore` 当前 provider/language/apiKey。
-4. 路由到 provider（`deepseek/openai/gemini/qwen/kimi`）。
+4. 路由到 provider；`useLocalBackend == true` 时先尝试本地服务，失败后 fallback 到所选在线 provider。
 5. provider 解析结果并补齐缺失 token（过滤标点）。
 6. 标注用例映射 `WordToken` 与高亮色。
 7. 成功后写入展示状态，并触发：
@@ -84,6 +84,8 @@
 - 字段：
   - `provider`
   - `language`
+  - `useLocalBackend`
+  - `developerOptionsUnlocked`
   - `appearanceMode`
   - `screenshotAppearanceMode`
   - `shortcutEnabled`
@@ -119,8 +121,9 @@
 ## 7. 日志、截图与笔记
 
 ### 7.1 运行日志
-- 目录：`~/Library/Logs/tsuki`
+- 目录：`~/Library/Logs/tsuki/logs`
 - 文件名：`tsuki-app-<run-id>.log`
+- 格式：`[timestamp] [category] message`
 - 关键内容：设置变更、快捷键事件、`AI_REQ` / `AI_RES`
 
 ### 7.2 翻译笔记

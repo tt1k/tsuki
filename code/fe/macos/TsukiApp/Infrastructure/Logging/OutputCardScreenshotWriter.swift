@@ -25,14 +25,14 @@ enum OutputCardScreenshotWriter {
                     let bitmap = NSBitmapImageRep(data: tiffData),
                     let pngData = bitmap.representation(using: .png, properties: [:])
                 else {
-                    AppEventLogger.log("Failed to encode output card screenshot as PNG")
+                    AppEventLogger.log("Failed to encode output card screenshot as PNG", category: .screenshot)
                     continue
                 }
 
                 try pngData.write(to: outputURL, options: .atomic)
             }
         } catch {
-            AppEventLogger.log("Failed to save output card screenshot: \(error.localizedDescription)")
+            AppEventLogger.log("Failed to save output card screenshot: \(error.localizedDescription)", category: .screenshot)
         }
     }
 }

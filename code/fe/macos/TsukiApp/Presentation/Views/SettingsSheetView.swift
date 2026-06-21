@@ -6,6 +6,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     case appearance
     case database
     case about
+    case developer
 
     var id: String { rawValue }
 
@@ -14,17 +15,10 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .appearance: "circle.lefthalf.filled"
         case .database: "cylinder"
+        case .developer: "wrench.and.screwdriver"
         case .about: "info.circle"
         }
     }
-}
-
-private enum ProviderOption: String, CaseIterable {
-    case deepseek
-    case openai
-    case gemini
-    case qwen
-    case kimi
 }
 
 private enum LanguageOption: String, CaseIterable {
@@ -68,6 +62,7 @@ struct SettingsSheetView: View {
     @State private var hoveredTab: SettingsTab?
     @State private var isAPIKeyButtonHovered = false
     @State private var isNotePathButtonHovered = false
+    @State private var isLogPathButtonHovered = false
     @State private var isDatabasePathButtonHovered = false
     @State private var isEditButtonHovered = false
     @State private var isExportButtonHovered = false
@@ -77,6 +72,8 @@ struct SettingsSheetView: View {
     @FocusState private var apiKeyEditorFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     private let cacheStore = SQLiteTranslationCacheStore()
+    private let settingsRowHeight: CGFloat = 28
+    private let settingsRowFont = Font.system(size: 13, weight: .medium, design: .monospaced)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -110,7 +107,7 @@ struct SettingsSheetView: View {
             }
             if !hasInitializedLogs {
                 hasInitializedLogs = true
-                AppEventLogger.log("Settings appeared")
+                AppEventLogger.log("Settings appeared", category: .settings)
             }
             refreshDatabaseInfo()
         }
@@ -118,17 +115,17 @@ struct SettingsSheetView: View {
             endAPIKeyEditing()
             refreshAPIKeyInput()
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: provider=\(settingsStore.provider)")
+                AppEventLogger.log("Settings changed: provider=\(settingsStore.provider)", category: .settings)
             }
         }
         .onChangeCompat(of: settingsStore.language) { _ in
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: language=\(settingsStore.language)")
+                AppEventLogger.log("Settings changed: language=\(settingsStore.language)", category: .settings)
             }
         }
-        .onChangeCompat(of: settingsStore.useCustomModel) { _ in
+        .onChangeCompat(of: settingsStore.useLocalBackend) { _ in
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: useCustomModel=\(settingsStore.useCustomModel)")
+                AppEventLogger.log("Settings changed: useLocalBackend=\(settingsStore.useLocalBackend)", category: .settings)
             }
         }
         .onChangeCompat(of: settingsStore.appearanceMode) { _ in
@@ -137,7 +134,7 @@ struct SettingsSheetView: View {
                 windowGlassOpacity: settingsStore.windowGlassOpacity
             )
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: appearanceMode=\(settingsStore.appearanceMode.rawValue)")
+                AppEventLogger.log("Settings changed: appearanceMode=\(settingsStore.appearanceMode.rawValue)", category: .settings)
             }
         }
         .onChangeCompat(of: settingsStore.windowGlassOpacity) { _ in
@@ -147,12 +144,12 @@ struct SettingsSheetView: View {
             )
             triggerOpacityHapticIfNeeded()
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: windowGlassOpacity=\(settingsStore.windowGlassOpacity)")
+                AppEventLogger.log("Settings changed: windowGlassOpacity=\(settingsStore.windowGlassOpacity)", category: .settings)
             }
         }
         .onChangeCompat(of: settingsStore.dockIconVisible) { _ in
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: dockIconVisible=\(settingsStore.dockIconVisible)")
+                AppEventLogger.log("Settings changed: dockIconVisible=\(settingsStore.dockIconVisible)", category: .settings)
             }
 
             if settingsStore.dockIconVisible {
@@ -162,7 +159,7 @@ struct SettingsSheetView: View {
         .onChangeCompat(of: selectedTab) { _ in
             endAPIKeyEditing()
             if hasInitializedLogs {
-                AppEventLogger.log("Settings changed: selectedTab=\(selectedTab.rawValue)")
+                AppEventLogger.log("Settings changed: selectedTab=\(selectedTab.rawValue)", category: .settings)
             }
             if selectedTab == .database {
                 refreshDatabaseInfo()
@@ -198,7 +195,7 @@ struct SettingsSheetView: View {
                 Spacer()
 
                 Button {
-                    AppEventLogger.log("Settings closed")
+                    AppEventLogger.log("Settings closed", category: .userEvent)
                     if let window = NSApp.keyWindow {
                         window.close()
                     } else {
@@ -230,14 +227,22 @@ struct SettingsSheetView: View {
 
     private var sideBar: some View {
         VStack(spacing: 10) {
-            ForEach(SettingsTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 Button {
                     withAnimation(.easeOut(duration: 0.12)) {
                         selectedTab = tab
                     }
                 } label: {
-                    Label(tabTitle(tab), systemImage: tab.symbol)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    HStack(spacing: 8) {
+                        Image(systemName: tab.symbol)
+                            .font(settingsRowFont)
+                            .frame(width: 18, alignment: .center)
+
+                        Text(tabTitle(tab))
+                            .font(settingsRowFont)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                        .font(settingsRowFont)
                         .foregroundStyle(selectedTab == tab ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
@@ -270,7 +275,7 @@ struct SettingsSheetView: View {
             Spacer()
         }
         .padding(14)
-        .frame(width: 180)
+        .frame(width: 200)
     }
 
     private var detailArea: some View {
@@ -278,6 +283,12 @@ struct SettingsSheetView: View {
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(.clear)
+    }
+
+    private var visibleTabs: [SettingsTab] {
+        SettingsTab.allCases.filter { tab in
+            tab != .developer || settingsStore.developerOptionsUnlocked
+        }
     }
 
     @ViewBuilder
@@ -289,6 +300,8 @@ struct SettingsSheetView: View {
             appearanceTabContent
         case .database:
             databaseTabContent
+        case .developer:
+            developerTabContent
         case .about:
             aboutTabContent
         }
@@ -298,7 +311,7 @@ struct SettingsSheetView: View {
         VStack(spacing: 10) {
             HStack {
                 Text(localizedText(en: "Language", zhCN: "语言", zhTW: "語言", ja: "言語"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -313,17 +326,18 @@ struct SettingsSheetView: View {
                 .frame(width: 120)
                 .tint(DesignTokens.ColorToken.textMain)
             }
+            .frame(height: settingsRowHeight)
 
             HStack {
-                Text(localizedText(en: "Provider", zhCN: "模型", zhTW: "模型", ja: "モデル"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                Text(localizedText(en: "Provider", zhCN: "服务商", zhTW: "服務商", ja: "プロバイダー"))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
 
                 Picker("Provider", selection: $settingsStore.provider) {
-                    ForEach(ProviderOption.allCases, id: \.rawValue) { option in
-                        Text(option.rawValue).tag(option.rawValue)
+                    ForEach(settingsStore.providerOptions) { option in
+                        Text(option.title).tag(option.id)
                     }
                 }
                 .labelsHidden()
@@ -331,23 +345,11 @@ struct SettingsSheetView: View {
                 .frame(width: 120)
                 .tint(DesignTokens.ColorToken.textMain)
             }
-
-            HStack {
-                Text(localizedText(en: "Use Custom Model", zhCN: "使用自定义模型", zhTW: "使用自訂模型", ja: "カスタムモデルを使用"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                Spacer()
-
-                Toggle("", isOn: $settingsStore.useCustomModel)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(DesignTokens.ColorToken.textDim)
-            }
+            .frame(height: settingsRowHeight)
 
             HStack {
                 Text(localizedText(en: "API Key", zhCN: "API Key", zhTW: "API Key", ja: "API キー"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -409,10 +411,11 @@ struct SettingsSheetView: View {
                     }
                 }
             }
+            .frame(height: settingsRowHeight)
 
             HStack(alignment: .firstTextBaseline) {
                 Text(localizedText(en: "Note Path", zhCN: "笔记路径", zhTW: "筆記路徑", ja: "ノートパス"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -428,7 +431,7 @@ struct SettingsSheetView: View {
                             .truncationMode(.middle)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .frame(width: 260, alignment: .trailing)
+                            .frame(width: 290, alignment: .trailing)
                             .background(
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     .fill(
@@ -449,9 +452,45 @@ struct SettingsSheetView: View {
                         .foregroundStyle(DesignTokens.ColorToken.textMain)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .frame(width: 260, alignment: .trailing)
+                        .frame(width: 290, alignment: .trailing)
                 }
             }
+            .frame(height: settingsRowHeight)
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "Log Path", zhCN: "日志路径", zhTW: "日誌路徑", ja: "ログパス"))
+                    .font(settingsRowFont)
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Button {
+                    openLogDirectoryInFinder()
+                } label: {
+                    Text(logDirectoryPath)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundStyle(isLogPathButtonHovered ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(width: 290, alignment: .trailing)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    isLogPathButtonHovered
+                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                        : .clear
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered in
+                    isLogPathButtonHovered = isHovered
+                }
+                .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
+            }
+            .frame(height: settingsRowHeight)
         }
     }
 
@@ -459,7 +498,7 @@ struct SettingsSheetView: View {
         VStack(spacing: 10) {
             HStack {
                 Text(localizedText(en: "App Theme", zhCN: "应用主题", zhTW: "應用主題", ja: "アプリテーマ"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -474,23 +513,11 @@ struct SettingsSheetView: View {
                 .frame(width: 120)
                 .tint(DesignTokens.ColorToken.textMain)
             }
-
-            HStack {
-                Text(localizedText(en: "Show Dock icon", zhCN: "显示 Dock 图标", zhTW: "顯示 Dock 圖示", ja: "Dock アイコンを表示"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                Spacer()
-
-                Toggle("", isOn: $settingsStore.dockIconVisible)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(DesignTokens.ColorToken.textDim)
-            }
+            .frame(height: settingsRowHeight)
 
             HStack(alignment: .firstTextBaseline) {
                 Text(opacityTitle)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -500,6 +527,21 @@ struct SettingsSheetView: View {
                 }
                 .frame(width: 112, alignment: .trailing)
             }
+            .frame(height: settingsRowHeight)
+
+            HStack {
+                Text(localizedText(en: "Show Dock icon", zhCN: "显示 Dock 图标", zhTW: "顯示 Dock 圖示", ja: "Dock アイコンを表示"))
+                    .font(settingsRowFont)
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Toggle("", isOn: $settingsStore.dockIconVisible)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(DesignTokens.ColorToken.textDim)
+            }
+            .frame(height: settingsRowHeight)
         }
     }
 
@@ -507,7 +549,7 @@ struct SettingsSheetView: View {
         VStack(spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(localizedText(en: "Entry Count", zhCN: "词库数量", zhTW: "詞庫數量", ja: "語彙数"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -517,44 +559,11 @@ struct SettingsSheetView: View {
                     .foregroundStyle(DesignTokens.ColorToken.textMain)
                     .frame(width: 260, alignment: .trailing)
             }
-
-            HStack(alignment: .firstTextBaseline) {
-                Text(localizedText(en: "DB Path", zhCN: "数据库路径", zhTW: "資料庫路徑", ja: "DB パス"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundStyle(DesignTokens.ColorToken.textDim)
-
-                Spacer()
-
-                Button {
-                    openDatabaseInFinder()
-                } label: {
-                    Text(cacheStore.databasePath)
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
-                        .foregroundStyle(isDatabasePathButtonHovered ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .frame(width: 260, alignment: .trailing)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(
-                                    isDatabasePathButtonHovered
-                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
-                                        : .clear
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-                .onHover { isHovered in
-                    isDatabasePathButtonHovered = isHovered
-                }
-                .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
-            }
+            .frame(height: settingsRowHeight)
 
             HStack(alignment: .firstTextBaseline) {
                 Text(localizedText(en: "Export Notes", zhCN: "导出笔记", zhTW: "匯出筆記", ja: "ノートを書き出す"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -594,10 +603,11 @@ struct SettingsSheetView: View {
                 }
                 .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
             }
+            .frame(height: settingsRowHeight)
 
             HStack(alignment: .firstTextBaseline) {
                 Text(localizedText(en: "Clear Cache", zhCN: "清空缓存", zhTW: "清空快取", ja: "キャッシュを消去"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
@@ -637,16 +647,17 @@ struct SettingsSheetView: View {
                 }
                 .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
             }
+            .frame(height: settingsRowHeight)
 
             HStack(alignment: .firstTextBaseline) {
                 Text(localizedText(en: "Edit Records", zhCN: "编辑记录", zhTW: "編輯記錄", ja: "レコード編集"))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
 
                 Spacer()
 
                 Button {
-                    AppEventLogger.log("Database editor opened")
+                    AppEventLogger.log("Database editor opened", category: .userEvent)
                     isShowingDatabaseEditor = true
                 } label: {
                     Text(localizedText(en: "Edit", zhCN: "编辑", zhTW: "編輯", ja: "編集"))
@@ -677,23 +688,94 @@ struct SettingsSheetView: View {
                 }
                 .disabled(isExportingDatabase || isClearingDatabase || databaseEntryCount == 0)
             }
+            .frame(height: settingsRowHeight)
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(localizedText(en: "DB Path", zhCN: "数据库路径", zhTW: "資料庫路徑", ja: "DB パス"))
+                    .font(settingsRowFont)
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Button {
+                    openDatabaseInFinder()
+                } label: {
+                    Text(cacheStore.databasePath)
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundStyle(isDatabasePathButtonHovered ? DesignTokens.ColorToken.textMain : DesignTokens.ColorToken.textDim)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(width: 260, alignment: .trailing)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    isDatabasePathButtonHovered
+                                        ? DesignTokens.ColorToken.controlFill(opacity: settingsStore.windowGlassOpacity)
+                                        : .clear
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { isHovered in
+                    isDatabasePathButtonHovered = isHovered
+                }
+                .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
+            }
+            .frame(height: settingsRowHeight)
+        }
+    }
+
+    private var developerTabContent: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text(localizedText(en: "Use Local Backend", zhCN: "使用本地后端接口", zhTW: "使用本地後端介面", ja: "ローカルバックエンドを使用"))
+                    .font(settingsRowFont)
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Toggle("", isOn: $settingsStore.useLocalBackend)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(DesignTokens.ColorToken.textDim)
+            }
+            .frame(height: settingsRowHeight)
         }
     }
 
     private var aboutTabContent: some View {
         VStack(spacing: 10) {
-            infoRow(title: localizedText(en: "App", zhCN: "应用", zhTW: "應用", ja: "アプリ"), value: appDisplayName)
+            appInfoRow
             infoRow(title: localizedText(en: "Version", zhCN: "版本", zhTW: "版本", ja: "バージョン"), value: appVersion)
             HStack {
                 Text(localizedText(en: "Connect", zhCN: "联系", zhTW: "聯絡", ja: "連絡"))
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
                 Spacer()
                 Link("github/tt1k", destination: URL(string: "https://github.com/tt1k")!)
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .font(settingsRowFont)
                     .foregroundStyle(DesignTokens.ColorToken.textMain)
             }
+            .frame(height: settingsRowHeight)
         }
+    }
+
+    private var appInfoRow: some View {
+        HStack {
+            Text(localizedText(en: "App", zhCN: "应用", zhTW: "應用", ja: "アプリ"))
+                .font(settingsRowFont)
+                .foregroundStyle(DesignTokens.ColorToken.textDim)
+            Spacer()
+            Text(appDisplayName)
+                .font(settingsRowFont)
+                .foregroundStyle(DesignTokens.ColorToken.textMain)
+                .onTapGesture(count: 2) {
+                    unlockDeveloperTab()
+                }
+        }
+        .frame(height: settingsRowHeight)
     }
 
     private var appVersion: String {
@@ -808,9 +890,20 @@ struct SettingsSheetView: View {
             .path
     }
 
+    private var logDirectoryPath: String {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/tsuki/logs", isDirectory: true)
+            .path
+    }
+
     private func openNoteDirectoryInFinder() {
         guard let noteDirectoryPath else { return }
         let url = URL(fileURLWithPath: noteDirectoryPath, isDirectory: true)
+        NSWorkspace.shared.open(url)
+    }
+
+    private func openLogDirectoryInFinder() {
+        let url = URL(fileURLWithPath: logDirectoryPath, isDirectory: true)
         NSWorkspace.shared.open(url)
     }
 
@@ -829,7 +922,7 @@ struct SettingsSheetView: View {
     }
 
     private func startDatabaseExport() {
-        AppEventLogger.log("Database export button clicked")
+        AppEventLogger.log("Database export button clicked", category: .userEvent)
 
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -845,17 +938,17 @@ struct SettingsSheetView: View {
         )
 
         guard panel.runModal() == .OK, let destination = panel.url else {
-            AppEventLogger.log("Database export cancelled: no destination selected")
+            AppEventLogger.log("Database export cancelled: no destination selected", category: .userEvent)
             return
         }
 
-        AppEventLogger.log("Database export destination selected: \(destination.path)")
+        AppEventLogger.log("Database export destination selected: \(destination.path)", category: .database)
 
         isExportingDatabase = true
 
         Task {
             let records = await cacheStore.loadAllRecords()
-            AppEventLogger.log("Database export started: records=\(records.count)")
+            AppEventLogger.log("Database export started: records=\(records.count)", category: .database)
             do {
                 let exportedDirectory = try await MainActor.run {
                     try TranslationCacheNoteExporter.export(records: records, to: destination)
@@ -883,7 +976,7 @@ struct SettingsSheetView: View {
                 }
 
                 NSWorkspace.shared.open(exportedDirectory)
-                AppEventLogger.log("Cache export completed: \(exportedDirectory.path)")
+                AppEventLogger.log("Cache export completed: \(exportedDirectory.path)", category: .database)
             } catch {
                 await MainActor.run {
                     isExportingDatabase = false
@@ -900,13 +993,13 @@ struct SettingsSheetView: View {
                     failedAlert.addButton(withTitle: localizedText(en: "OK", zhCN: "确定", zhTW: "確定", ja: "OK"))
                     failedAlert.runModal()
                 }
-                AppEventLogger.log("Cache export failed: \(error.localizedDescription)")
+                AppEventLogger.log("Cache export failed: \(error.localizedDescription)", category: .database)
             }
         }
     }
 
     private func confirmAndClearDatabaseCache() {
-        AppEventLogger.log("Database clear button clicked")
+        AppEventLogger.log("Database clear button clicked", category: .userEvent)
 
         let alert = NSAlert()
         alert.alertStyle = .warning
@@ -927,7 +1020,7 @@ struct SettingsSheetView: View {
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else {
-            AppEventLogger.log("Database clear cancelled by user")
+            AppEventLogger.log("Database clear cancelled by user", category: .userEvent)
             return
         }
 
@@ -957,7 +1050,7 @@ struct SettingsSheetView: View {
                 doneAlert.runModal()
             }
 
-            AppEventLogger.log("Database cache cleared: removed=\(removed)")
+            AppEventLogger.log("Database cache cleared: removed=\(removed)", category: .database)
         }
     }
 
@@ -971,7 +1064,7 @@ struct SettingsSheetView: View {
         guard !isEditingAPIKey else { return }
         isEditingAPIKey = true
         apiKeyInput = settingsStore.apiKey(for: settingsStore.provider)
-        AppEventLogger.log("Settings editing API key for provider=\(settingsStore.provider)")
+        AppEventLogger.log("Settings editing API key for provider=\(settingsStore.provider)", category: .settings)
         DispatchQueue.main.async {
             apiKeyEditorFocused = true
         }
@@ -992,7 +1085,7 @@ struct SettingsSheetView: View {
         if submitted.isEmpty {
             settingsStore.setAPIKey("", for: settingsStore.provider)
             apiKeyInput = ""
-            AppEventLogger.log("Settings changed: apiKey cleared for provider=\(settingsStore.provider)")
+            AppEventLogger.log("Settings changed: apiKey cleared for provider=\(settingsStore.provider)", category: .settings)
             return
         }
 
@@ -1003,7 +1096,7 @@ struct SettingsSheetView: View {
 
         settingsStore.setAPIKey(submitted, for: settingsStore.provider)
         apiKeyInput = maskedAPIKey(submitted)
-        AppEventLogger.log("Settings changed: apiKey updated for provider=\(settingsStore.provider)")
+        AppEventLogger.log("Settings changed: apiKey updated for provider=\(settingsStore.provider)", category: .settings)
     }
 
     private func maskedAPIKey(_ key: String) -> String {
@@ -1028,9 +1121,23 @@ struct SettingsSheetView: View {
             return localizedText(en: "Appearance", zhCN: "外观", zhTW: "外觀", ja: "外観")
         case .database:
             return localizedText(en: "Database", zhCN: "数据库", zhTW: "資料庫", ja: "データベース")
+        case .developer:
+            return localizedText(en: "Developer", zhCN: "开发者选项", zhTW: "開發者選項", ja: "開発者オプション")
         case .about:
             return localizedText(en: "About", zhCN: "关于", zhTW: "關於", ja: "アプリについて")
         }
+    }
+
+    private func unlockDeveloperTab() {
+        guard !settingsStore.developerOptionsUnlocked else {
+            selectedTab = .developer
+            return
+        }
+
+        settingsStore.developerOptionsUnlocked = true
+        selectedTab = .developer
+        AppEventLogger.log("Developer settings tab unlocked", category: .settings)
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
     private func languageTitle(_ option: LanguageOption) -> String {
@@ -1118,12 +1225,128 @@ struct SettingsSheetView: View {
     private func infoRow(title: String, value: String) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                .font(settingsRowFont)
                 .foregroundStyle(DesignTokens.ColorToken.textDim)
             Spacer()
             Text(value)
-                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                .font(settingsRowFont)
                 .foregroundStyle(DesignTokens.ColorToken.textMain)
         }
+        .frame(height: settingsRowHeight)
+    }
+}
+
+struct TsukiAboutWindowView: View {
+    @ObservedObject var settingsStore: SettingsStore
+    var onOK: () -> Void
+    var onCopy: (String) -> Void
+
+    private let settingsRowHeight: CGFloat = 28
+    private let settingsRowFont = Font.system(size: 13, weight: .medium, design: .monospaced)
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 74, height: 74)
+                .accessibilityHidden(true)
+
+            Text(appDisplayName)
+                .font(.system(size: 19, weight: .semibold, design: .default))
+                .foregroundStyle(DesignTokens.ColorToken.textMain)
+                .multilineTextAlignment(.center)
+
+            VStack(spacing: 8) {
+                infoRow(title: localizedText(en: "Version", zhCN: "版本", zhTW: "版本", ja: "バージョン"), value: appVersion)
+                HStack {
+                    Text("\(localizedText(en: "Connect", zhCN: "联系", zhTW: "聯絡", ja: "連絡")):")
+                        .font(settingsRowFont)
+                        .foregroundStyle(DesignTokens.ColorToken.textDim)
+                    Link("github/tt1k", destination: URL(string: "https://github.com/tt1k")!)
+                        .font(settingsRowFont)
+                        .foregroundStyle(DesignTokens.ColorToken.textMain)
+                }
+                .frame(height: settingsRowHeight)
+            }
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 4)
+
+            HStack(spacing: 10) {
+                Button {
+                    onOK()
+                } label: {
+                    Text("OK")
+                        .frame(maxWidth: .infinity)
+                }
+                .keyboardShortcut(.cancelAction)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .frame(maxWidth: .infinity)
+
+                Button {
+                    onCopy(aboutCopyText)
+                } label: {
+                    Text("Copy")
+                        .frame(maxWidth: .infinity)
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+    }
+
+    private var appDisplayName: String {
+        switch settingsStore.language {
+        case "en":
+            return "Tsuki Translate"
+        case "cn":
+            return "言叶之月"
+        case "tw":
+            return "言葉之月"
+        default:
+            return "月の言葉"
+        }
+    }
+
+    private var aboutCopyText: String {
+        """
+        \(appDisplayName)
+        Version: \(appVersion)
+        Connect: github/tt1k
+        https://github.com/tt1k
+        """
+    }
+
+    private func localizedText(en: String, zhCN: String, zhTW: String, ja: String) -> String {
+        switch settingsStore.language {
+        case "cn": return zhCN
+        case "tw": return zhTW
+        case "ja": return ja
+        default: return en
+        }
+    }
+
+    @ViewBuilder
+    private func infoRow(title: String, value: String) -> some View {
+        HStack {
+            Text("\(title):")
+                .font(settingsRowFont)
+                .foregroundStyle(DesignTokens.ColorToken.textDim)
+            Text(value)
+                .font(settingsRowFont)
+                .foregroundStyle(DesignTokens.ColorToken.textMain)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: settingsRowHeight)
     }
 }

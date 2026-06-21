@@ -30,6 +30,7 @@ struct TsukiApp: App {
                 .preferredColorScheme(settingsStore.appearanceMode.preferredColorScheme)
                 .frame(width: DesignTokens.Size.windowWidth, height: DesignTokens.Size.windowHeight)
                 .onAppear {
+                    appDelegate.setSettingsStore(settingsStore)
                     appDelegate.applyDockIconVisibility(settingsStore.dockIconVisible)
                     appDelegate.configureWindowIfNeeded(
                         forceTopRightOnLaunch: true,

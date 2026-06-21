@@ -239,7 +239,7 @@ struct DatabaseEditorSheetView: View {
 
         Task {
             let removedCount = await cacheStore.deleteRecords(ids: recordIDs)
-            AppEventLogger.log("Database editor deleted records: requested=\(recordIDs.count) removed=\(removedCount)")
+            AppEventLogger.log("Database editor deleted records: requested=\(recordIDs.count) removed=\(removedCount)", category: .database)
 
             let records = await cacheStore.loadAllRecords()
             await MainActor.run {
@@ -283,7 +283,7 @@ struct DatabaseEditorSheetView: View {
         ].joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(rowText, forType: .string)
-        AppEventLogger.log("Database editor copied row: id=\(record.id)")
+        AppEventLogger.log("Database editor copied row: id=\(record.id)", category: .userEvent)
     }
 
     private func displaySentence(_ sentence: String) -> String {

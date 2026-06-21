@@ -74,8 +74,8 @@
 1. `MainViewModel.translate()` 校验空输入、长度、并发状态。
 2. 读取 `SettingsStore`（provider、language、apiKey）。
 3. 调用 `TranslationUseCase.execute()`。
-4. `TranslateRouterProvider` 路由到具体 provider（`deepseek/openai/gemini/qwen/kimi`）。
-5. 对应 provider 请求 `chat/completions` 并解析 JSON。
+4. `TranslateRouterProvider` 负责路由；`useLocalBackend == true` 时先尝试本地服务 `127.0.0.1:5188/query/ds`，失败后 fallback 到所选在线 provider。
+5. 在线 provider（`deepseek/openai/gemini/qwen/kimi`）请求 `chat/completions` 并解析 JSON。
 6. provider 侧先做“漏 token 本地补齐（不含标点）”。
 7. `TokenizeAndAnnotateUseCase` 分配高亮色并返回 `TranslationResult`。
 8. ViewModel 更新为 `success`/`failure`，并记录日志与笔记。
@@ -112,6 +112,8 @@
 当前持久化字段：
 - `provider`
 - `language`
+- `useLocalBackend`
+- `developerOptionsUnlocked`
 - `appearanceMode`
 - `screenshotAppearanceMode`
 - `shortcutEnabled`（字段保留）
@@ -128,8 +130,10 @@
 ## 9. 可观测性与产物
 
 运行日志：
-- 目录：`~/Library/Logs/tsuki`
+- 目录：`~/Library/Logs/tsuki/logs`
 - 文件：`tsuki-app-<run-id>.log`
+- 格式：`[timestamp] [category] message`
+- category 由 `AppLogCategory` enum 定义，例如 `user event`、`settings`、`network`、`cache`
 - 内容：设置变更、快捷键事件、`AI_REQ`/`AI_RES` 紧凑 JSON
 
 翻译笔记：

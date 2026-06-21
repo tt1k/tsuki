@@ -5,6 +5,7 @@
 .build/
 Packages/
 Package.resolved
+.swift-module-cache/
 
 # Xcode
 DerivedData/

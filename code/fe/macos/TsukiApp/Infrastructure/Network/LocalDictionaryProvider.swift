@@ -1,57 +1,53 @@
 import Foundation
 
-struct DeepSeekDictionaryProvider: TranslatorProvider {
-    private struct LocalResponse: Decodable {
-        struct Payload: Decodable {
-            struct Sentence: Decodable {
-                let text: String
-                let mean: String?
-            }
-
-            struct Kanji: Decodable {
-                let text: String
-                let mean: String?
-                let hiragana: String?
-            }
-
-            struct Token: Decodable {
-                let k: String
-                let f: String?
-            }
-
-            let sentence: Sentence
-            let kanji: Kanji
-            let tokens: [Token]
+struct LocalDictionaryResponse: Decodable {
+    struct Payload: Decodable {
+        struct Sentence: Decodable {
+            let text: String
+            let mean: String?
         }
 
-        let code: Int
-        let message: String
-        let data: Payload?
+        struct Kanji: Decodable {
+            let text: String
+            let mean: String?
+            let hiragana: String?
+        }
+
+        struct Token: Decodable {
+            let k: String
+            let f: String?
+        }
+
+        let sentence: Sentence
+        let kanji: Kanji
+        let tokens: [Token]
     }
 
-    private let remoteProvider = CompletionsDictionaryHelper(
-        providerName: "DeepSeek",
-        apiURL: URL(string: "https://api.deepseek.com/chat/completions")!,
-        model: "deepseek-chat"
-    )
+    let code: Int
+    let message: String
+    let data: Payload?
+}
+
+struct LocalDictionaryProvider: TranslatorProvider {
+    enum ProviderError: LocalizedError {
+        case unavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .unavailable:
+                return "Local dictionary service is unavailable"
+            }
+        }
+    }
 
     private let localBaseURL = URL(string: "http://127.0.0.1:5188")!
 
     func translate(_ request: TranslationRequest) async throws -> ProviderTranslationPayload {
-        if !request.useCustomModel {
-            if await isLocalServiceAvailable() {
-                do {
-                    AppEventLogger.log("TRANSLATION_ROUTE provider=deepseek route=local_query_ds")
-                    return try await translateByLocalService(request)
-                } catch {
-                    AppEventLogger.log("LOCAL_DS_FAIL \(error.localizedDescription); fallback=deepseek")
-                }
-            } else {
-                AppEventLogger.log("LOCAL_DS_UNAVAILABLE fallback=deepseek")
-            }
+        guard await isLocalServiceAvailable() else {
+            throw ProviderError.unavailable
         }
 
-        return try await remoteProvider.translate(request)
+        return try await translateByLocalService(request)
     }
 
     private func isLocalServiceAvailable() async -> Bool {
@@ -60,25 +56,27 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
         request.timeoutInterval = 1.5
 
         AppEventLogger.log(
-            "LOCAL_DS_HEALTH_REQ \(compactJSON(["url": request.url?.absoluteString ?? "", "method": request.httpMethod ?? "GET"]))"
+            "LOCAL_DICT_HEALTH_REQ \(compactJSON(["url": request.url?.absoluteString ?? "", "method": request.httpMethod ?? "GET"]))",
+            category: .localBackend
         )
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
             AppEventLogger.log(
-                "LOCAL_DS_HEALTH_RES \(compactJSON(["status": statusCode, "body": String(decoding: data, as: UTF8.self)]))"
+                "LOCAL_DICT_HEALTH_RES \(compactJSON(["status": statusCode, "body": String(decoding: data, as: UTF8.self)]))",
+                category: .localBackend
             )
             return (200 ... 299).contains(statusCode)
         } catch {
-            AppEventLogger.log("LOCAL_DS_HEALTH_FAIL \(error.localizedDescription)")
+            AppEventLogger.log("LOCAL_DICT_HEALTH_FAIL \(error.localizedDescription)", category: .localBackend)
             return false
         }
     }
 
     private func translateByLocalService(_ request: TranslationRequest) async throws -> ProviderTranslationPayload {
         guard var components = URLComponents(url: localBaseURL.appendingPathComponent("query/ds"), resolvingAgainstBaseURL: false) else {
-            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local DS")
+            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local Dictionary")
         }
 
         components.queryItems = [
@@ -87,7 +85,7 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
         ]
 
         guard let url = components.url else {
-            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local DS")
+            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local Dictionary")
         }
 
         var urlRequest = URLRequest(url: url)
@@ -95,21 +93,23 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
         urlRequest.timeoutInterval = 8
 
         AppEventLogger.log(
-            "LOCAL_DS_REQ \(compactJSON(["url": url.absoluteString, "method": urlRequest.httpMethod ?? "GET", "lang": request.sourceLang, "word": request.sourceText]))"
+            "LOCAL_DICT_REQ \(compactJSON(["url": url.absoluteString, "method": urlRequest.httpMethod ?? "GET", "lang": request.sourceLang, "word": request.sourceText]))",
+            category: .localBackend
         )
 
         let (data, response) = try await URLSession.shared.data(for: urlRequest)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         AppEventLogger.log(
-            "LOCAL_DS_RES \(compactJSON(["status": statusCode, "response": String(decoding: data, as: UTF8.self)]))"
+            "LOCAL_DICT_RES \(compactJSON(["status": statusCode, "response": String(decoding: data, as: UTF8.self)]))",
+            category: .localBackend
         )
         guard (200 ... 299).contains(statusCode) else {
-            throw CompletionsDictionaryHelper.ProviderError.httpError("Local DS", statusCode, String(decoding: data, as: UTF8.self))
+            throw CompletionsDictionaryHelper.ProviderError.httpError("Local Dictionary", statusCode, String(decoding: data, as: UTF8.self))
         }
 
-        let decoded = try JSONDecoder().decode(LocalResponse.self, from: data)
+        let decoded = try JSONDecoder().decode(LocalDictionaryResponse.self, from: data)
         guard decoded.code == 0, let payload = decoded.data else {
-            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local DS")
+            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local Dictionary")
         }
 
         let rawTokens = payload.tokens
@@ -117,7 +117,7 @@ struct DeepSeekDictionaryProvider: TranslatorProvider {
             .map { RawWordToken(kanji: $0.k, furigana: $0.f ?? "") }
 
         guard !rawTokens.isEmpty else {
-            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local DS")
+            throw CompletionsDictionaryHelper.ProviderError.invalidResponse("Local Dictionary")
         }
 
         return ProviderTranslationPayload(

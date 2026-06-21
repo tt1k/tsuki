@@ -1,4 +1,5 @@
 import AppKit
+import AppKit
 import SwiftUI
 
 struct MainWindowView: View {
@@ -11,13 +12,17 @@ struct MainWindowView: View {
                 inputText: $viewModel.inputText,
                 isTranslating: viewModel.isTranslating,
                 onTranslate: {
-                    AppEventLogger.log("User clicked translate button")
+                    AppEventLogger.log("User clicked translate button", category: .userEvent)
                     viewModel.translate()
                 },
+                isWindowPinned: viewModel.isWindowPinned,
+                onToggleWindowPinned: {
+                    viewModel.toggleWindowPinned()
+                },
                 onSettings: {
-                    AppEventLogger.log("User opened settings")
+                    AppEventLogger.log("User opened settings", category: .userEvent)
                     guard let appDelegate = AppDelegate.shared ?? (NSApp.delegate as? AppDelegate) else {
-                        AppEventLogger.log("Failed to open settings: AppDelegate unavailable")
+                        AppEventLogger.log("Failed to open settings: AppDelegate unavailable", category: .window)
                         return
                     }
                     appDelegate.showSettingsWindow(settingsStore: settingsStore)
@@ -51,7 +56,7 @@ struct MainWindowView: View {
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Size.windowRadius, style: .continuous))
         .ignoresSafeArea(.container, edges: .top)
         .onReceive(NotificationCenter.default.publisher(for: .triggerTranslate)) { _ in
-            AppEventLogger.log("Enter translate shortcut received")
+            AppEventLogger.log("Enter translate shortcut received", category: .keyboard)
             viewModel.translate()
         }
         .onReceive(NotificationCenter.default.publisher(for: .fillInputAndTranslate)) { notification in
@@ -59,13 +64,46 @@ struct MainWindowView: View {
             viewModel.inputText = text
             viewModel.translate()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateTranslationHistoryPrevious)) { _ in
+            handleHistoryNavigation(.previous)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateTranslationHistoryNext)) { _ in
+            handleHistoryNavigation(.next)
+        }
         .onChangeCompat(of: viewModel.isTranslating) { translating in
             guard !translating, let result = viewModel.result else { return }
             saveOutputCardScreenshot(result: result)
         }
+        .onChangeCompat(of: viewModel.isWindowPinned) { isPinned in
+            AppEventLogger.log(isPinned ? "User pinned main window" : "User unpinned main window", category: .userEvent)
+            let appDelegate = AppDelegate.shared ?? (NSApp.delegate as? AppDelegate)
+            appDelegate?.setMainWindowPinned(isPinned)
+        }
+        .onAppear {
+            let appDelegate = AppDelegate.shared ?? (NSApp.delegate as? AppDelegate)
+            appDelegate?.setMainWindowPinned(viewModel.isWindowPinned)
+        }
         .onExitCommand {
             NSApp.hide(nil)
         }
+    }
+
+    private func handleHistoryNavigation(_ direction: MainViewModel.HistoryDirection) {
+        if viewModel.navigateHistory(direction) {
+            AppEventLogger.log(
+                direction == .previous ? "History previous shortcut applied" : "History next shortcut applied",
+                category: .keyboard
+            )
+            NotificationCenter.default.post(name: .focusInput, object: nil)
+            return
+        }
+
+        AppEventLogger.log(
+            direction == .previous ? "History previous shortcut hit boundary" : "History next shortcut hit boundary",
+            category: .keyboard
+        )
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        NSSound.beep()
     }
 
     private func saveOutputCardScreenshot(result: TranslationResult) {
@@ -88,7 +126,7 @@ struct MainWindowView: View {
 
         let validImages = images.compactMapValues { $0 }
         guard !validImages.isEmpty else {
-            AppEventLogger.log("Failed to render output card screenshot")
+            AppEventLogger.log("Failed to render output card screenshot", category: .screenshot)
             return
         }
 

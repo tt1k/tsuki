@@ -6,7 +6,7 @@
   - 不带参数时，显示帮助（等同 `./tsuki.sh -h`）。
 
 - `./tsuki.sh fe mac run`
-  - 构建并启动 macOS 前端 `TsukiApp`，会写启动日志到 `~/Library/Logs/tsuki/`。
+  - 构建并启动 macOS 前端 `TsukiApp`，会写启动日志到 `~/Library/Logs/tsuki/logs/`。
 
 - `./tsuki.sh fe mac stop`
   - 停止正在运行的 `TsukiApp` 进程。
@@ -27,7 +27,7 @@
 - `./tsuki.sh fe web run`
   - 后台启动 Web 前端开发服务器（`code/fe/web/tsuki-app`）。
   - 固定使用端口 `5199`（若端口被占用则启动失败，不会切换到其他端口）。
-  - 日志写入 `~/Library/Logs/tsuki/log/tsuki-web.log`，PID 写入 `~/Library/Logs/tsuki/log/tsuki-web.pid`，启动后终端可继续输入命令。
+  - 日志写入 `~/Library/Logs/tsuki/logs/tsuki-web.log`，PID 写入 `~/Library/Logs/tsuki/logs/tsuki-web.pid`，启动后终端可继续输入命令。
 
 - `./tsuki.sh fe web stop`
   - 停止 Web 前端开发服务器。

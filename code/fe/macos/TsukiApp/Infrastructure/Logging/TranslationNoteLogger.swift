@@ -40,7 +40,7 @@ enum TranslationNoteLogger {
                     try handle.close()
                 }
             } catch {
-                AppEventLogger.log("Failed to write translation note: \(error.localizedDescription)")
+                AppEventLogger.log("Failed to write translation note: \(error.localizedDescription)", category: .note)
             }
         }
     }

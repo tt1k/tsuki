@@ -14,7 +14,7 @@
 - 后端预留目录：`code/be`
 - SwiftPM 清单：`code/fe/macos/Package.swift`
 - 根目录启动脚本：`tsuki.sh`
-- 运行日志目录：`~/Library/Logs/tsuki`
+- 运行日志目录：`~/Library/Logs/tsuki/logs`
 - 翻译笔记目录：`~/Library/Logs/tsuki/note/<yyyy-MM-dd>`
 
 ## 3) 常用命令（从仓库根目录）

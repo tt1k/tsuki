@@ -4,24 +4,27 @@ struct TranslationRequest {
     let sourceText: String
     let provider: String
     let apiKey: String
+    let providerConfiguration: ProviderConfiguration?
     let sourceLang: String
     let targetLang: String
-    let useCustomModel: Bool
+    let useLocalBackend: Bool
 
     init(
         sourceText: String,
         provider: String,
         apiKey: String,
+        providerConfiguration: ProviderConfiguration? = nil,
         sourceLang: String,
         targetLang: String,
-        useCustomModel: Bool = false
+        useLocalBackend: Bool = true
     ) {
         self.sourceText = sourceText
         self.provider = provider
         self.apiKey = apiKey
+        self.providerConfiguration = providerConfiguration
         self.sourceLang = sourceLang
         self.targetLang = targetLang
-        self.useCustomModel = useCustomModel
+        self.useLocalBackend = useLocalBackend
     }
 
     var normalizedSourceText: String {
@@ -56,6 +59,13 @@ struct TranslationResult: Codable {
 struct WordToken: Hashable, Codable {
     let kanji: String
     let furigana: String
+    let annotation: String?
+
+    init(kanji: String, furigana: String, annotation: String? = nil) {
+        self.kanji = kanji
+        self.furigana = furigana
+        self.annotation = annotation
+    }
 }
 
 struct ProviderTranslationPayload {

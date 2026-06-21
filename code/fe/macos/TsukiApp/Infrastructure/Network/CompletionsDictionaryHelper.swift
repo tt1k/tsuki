@@ -76,6 +76,15 @@ struct CompletionsDictionaryHelper: TranslatorProvider {
         self.model = model
     }
 
+    init?(configuration: ProviderConfiguration) {
+        guard let apiURL = configuration.apiURL else { return nil }
+        self.init(
+            providerName: configuration.displayName,
+            apiURL: apiURL,
+            model: configuration.model
+        )
+    }
+
     func translate(_ request: TranslationRequest) async throws -> ProviderTranslationPayload {
         let apiKey = request.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
@@ -102,13 +111,15 @@ struct CompletionsDictionaryHelper: TranslatorProvider {
         urlRequest.httpBody = requestBody
 
         AppEventLogger.log(
-            "AI_REQ \(compactJSON(["provider": request.provider, "endpoint": "chat.completions", "url": apiURL.absoluteString, "request": jsonString(from: requestBody)]))"
+            "AI_REQ \(compactJSON(["provider": request.provider, "endpoint": "chat.completions", "url": apiURL.absoluteString, "request": jsonString(from: requestBody)]))",
+            category: .network
         )
 
         let (data, response) = try await URLSession.shared.data(for: urlRequest)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         AppEventLogger.log(
-            "AI_RES \(compactJSON(["provider": request.provider, "endpoint": "chat.completions", "status": statusCode, "response": utf8String(from: data)]))"
+            "AI_RES \(compactJSON(["provider": request.provider, "endpoint": "chat.completions", "status": statusCode, "response": utf8String(from: data)]))",
+            category: .network
         )
 
         if !(200 ... 299).contains(statusCode) {
@@ -301,16 +312,23 @@ struct CompletionsDictionaryHelper: TranslatorProvider {
 
     private func makePrompt(word: String, language: String) -> String {
         let label = meaningLanguageLabel(from: language)
+        let sourceLanguage = meaningLanguageLabel(from: language)
         return """
         You are a Japanese dictionary assistant.
 
         Task:
-        Given a Japanese word, return a JSON object with exactly these keys:
+        Given an input word or phrase in \(sourceLanguage), return the corresponding natural Japanese dictionary entry as a JSON object with exactly these keys:
         - kanji
         - reading
         - meaning (2-4 common meanings, separated by ;, must be written in \(label))
         - example (one natural Japanese sentence that contains the word)
         - tokens (tokenized words of the example sentence)
+
+        Japanese entry requirements:
+        - kanji must be the natural Japanese headword, not a copy of a non-Japanese input
+        - if the input is Chinese, translate its meaning into common Japanese first
+        - example must be a natural Japanese sentence and must contain the Japanese headword
+        - do not use Chinese-only words or Simplified Chinese characters in kanji, example, or tokens unless they are also valid natural Japanese usage
 
         Token requirements:
         - tokens is an array of objects

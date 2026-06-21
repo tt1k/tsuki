@@ -35,56 +35,96 @@ final class SettingsStore: ObservableObject {
     private struct ConfigFile: Codable {
         var provider: String
         var language: String
-        var useCustomModel: Bool
+        var useLocalBackend: Bool
+        var developerOptionsUnlocked: Bool
         var appearanceMode: String
         var windowGlassOpacity: Double
         var dockIconVisible: Bool
         var forceTopRightOnLaunch: Bool
+        var recapVersion: String
         var apiKeys: [String: String]
+        var providerConfigs: [String: ProviderConfiguration]
 
         enum CodingKeys: String, CodingKey {
             case provider
             case language
-            case useCustomModel
-            case appearanceMode
-            case windowGlassOpacity
-            case dockIconVisible
-            case forceTopRightOnLaunch
-            case apiKeys
+            case useLocalBackend = "use_local_backend"
+            case developerOptionsUnlocked = "developer_options_unlocked"
+            case appearanceMode = "appearance_mode"
+            case windowGlassOpacity = "window_glass_opacity"
+            case dockIconVisible = "dock_icon_visible"
+            case forceTopRightOnLaunch = "force_top_right_on_launch"
+            case recapVersion = "recap_version"
+            case apiKeys = "api_keys"
+            case providerConfigs = "provider_list"
         }
 
         init(
             provider: String,
             language: String,
-            useCustomModel: Bool,
+            useLocalBackend: Bool,
+            developerOptionsUnlocked: Bool,
             appearanceMode: String,
             windowGlassOpacity: Double,
             dockIconVisible: Bool,
             forceTopRightOnLaunch: Bool,
-            apiKeys: [String: String]
+            recapVersion: String,
+            apiKeys: [String: String],
+            providerConfigs: [String: ProviderConfiguration]
         ) {
             self.provider = provider
             self.language = language
-            self.useCustomModel = useCustomModel
+            self.useLocalBackend = useLocalBackend
+            self.developerOptionsUnlocked = developerOptionsUnlocked
             self.appearanceMode = appearanceMode
             self.windowGlassOpacity = windowGlassOpacity
             self.dockIconVisible = dockIconVisible
             self.forceTopRightOnLaunch = forceTopRightOnLaunch
+            self.recapVersion = recapVersion
             self.apiKeys = apiKeys
+            self.providerConfigs = providerConfigs
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             provider = try container.decode(String.self, forKey: .provider)
             language = try container.decode(String.self, forKey: .language)
-            useCustomModel = try container.decodeIfPresent(Bool.self, forKey: .useCustomModel) ?? Defaults.useCustomModel
-            appearanceMode = try container.decodeIfPresent(String.self, forKey: .appearanceMode) ?? Defaults.appearanceMode.rawValue
+            useLocalBackend = try container.decodeIfPresent(Bool.self, forKey: .useLocalBackend)
+                ?? Defaults.useLocalBackend
+            developerOptionsUnlocked = try container.decodeIfPresent(Bool.self, forKey: .developerOptionsUnlocked)
+                ?? Defaults.developerOptionsUnlocked
+            appearanceMode = try container.decodeIfPresent(String.self, forKey: .appearanceMode)
+                ?? Defaults.appearanceMode.rawValue
             windowGlassOpacity = Self.clampWindowGlassOpacity(
-                try container.decodeIfPresent(Double.self, forKey: .windowGlassOpacity) ?? Defaults.windowGlassOpacity
+                try container.decodeIfPresent(Double.self, forKey: .windowGlassOpacity)
+                    ?? Defaults.windowGlassOpacity
             )
-            dockIconVisible = try container.decodeIfPresent(Bool.self, forKey: .dockIconVisible) ?? Defaults.dockIconVisible
-            forceTopRightOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .forceTopRightOnLaunch) ?? Defaults.forceTopRightOnLaunch
-            apiKeys = try container.decodeIfPresent([String: String].self, forKey: .apiKeys) ?? [:]
+            dockIconVisible = try container.decodeIfPresent(Bool.self, forKey: .dockIconVisible)
+                ?? Defaults.dockIconVisible
+            forceTopRightOnLaunch = try container.decodeIfPresent(Bool.self, forKey: .forceTopRightOnLaunch)
+                ?? Defaults.forceTopRightOnLaunch
+            recapVersion = try container.decodeIfPresent(String.self, forKey: .recapVersion)
+                ?? Defaults.recapVersion
+            apiKeys = try container.decodeIfPresent([String: String].self, forKey: .apiKeys)
+                ?? [:]
+            let decodedProviderConfigs = try container.decodeIfPresent([String: ProviderConfiguration].self, forKey: .providerConfigs)
+                ?? [:]
+            providerConfigs = ProviderCatalog.normalizedCustomConfigurations(decodedProviderConfigs)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(provider, forKey: .provider)
+            try container.encode(language, forKey: .language)
+            try container.encode(useLocalBackend, forKey: .useLocalBackend)
+            try container.encode(developerOptionsUnlocked, forKey: .developerOptionsUnlocked)
+            try container.encode(appearanceMode, forKey: .appearanceMode)
+            try container.encode(windowGlassOpacity, forKey: .windowGlassOpacity)
+            try container.encode(dockIconVisible, forKey: .dockIconVisible)
+            try container.encode(forceTopRightOnLaunch, forKey: .forceTopRightOnLaunch)
+            try container.encode(recapVersion, forKey: .recapVersion)
+            try container.encode(apiKeys, forKey: .apiKeys)
+            try container.encode(providerConfigs, forKey: .providerConfigs)
         }
 
         private static func clampWindowGlassOpacity(_ value: Double) -> Double {
@@ -95,16 +135,15 @@ final class SettingsStore: ObservableObject {
     private enum Defaults {
         static let provider = "deepseek"
         static let language = "en"
-        static let useCustomModel = false
+        static let useLocalBackend = true
+        static let developerOptionsUnlocked = false
         static let appearanceMode: AppearanceMode = .dark
         static let windowGlassOpacity = 0.86
         static let dockIconVisible = true
         static let forceTopRightOnLaunch = true
+        static let recapVersion = ""
     }
 
-    private let supportedProviders: Set<String> = [
-        "deepseek", "openai", "gemini", "qwen", "kimi"
-    ]
     private let supportedLanguages: Set<String> = [
         "cn", "tw", "en", "ja", "ko", "es", "fr", "de", "ru"
     ]
@@ -117,7 +156,11 @@ final class SettingsStore: ObservableObject {
         didSet { saveIfNeeded() }
     }
 
-    @Published var useCustomModel: Bool {
+    @Published var useLocalBackend: Bool {
+        didSet { saveIfNeeded() }
+    }
+
+    @Published var developerOptionsUnlocked: Bool {
         didSet { saveIfNeeded() }
     }
 
@@ -144,7 +187,15 @@ final class SettingsStore: ObservableObject {
         didSet { saveIfNeeded() }
     }
 
+    @Published private(set) var recapVersion: String {
+        didSet { saveIfNeeded() }
+    }
+
     @Published private var apiKeys: [String: String] {
+        didSet { saveIfNeeded() }
+    }
+
+    @Published private var providerConfigs: [String: ProviderConfiguration] {
         didSet { saveIfNeeded() }
     }
 
@@ -157,12 +208,15 @@ final class SettingsStore: ObservableObject {
         self.configURL = Self.makeConfigURL(fileManager: fileManager)
         self.provider = Defaults.provider
         self.language = Defaults.language
-        self.useCustomModel = Defaults.useCustomModel
+        self.useLocalBackend = Defaults.useLocalBackend
+        self.developerOptionsUnlocked = Defaults.developerOptionsUnlocked
         self.appearanceMode = Defaults.appearanceMode
         self.windowGlassOpacity = Defaults.windowGlassOpacity
         self.dockIconVisible = Defaults.dockIconVisible
         self.forceTopRightOnLaunch = Defaults.forceTopRightOnLaunch
+        self.recapVersion = Defaults.recapVersion
         self.apiKeys = [:]
+        self.providerConfigs = [:]
         loadFromDisk()
     }
 
@@ -184,14 +238,17 @@ final class SettingsStore: ObservableObject {
 
     private func apply(snapshot: ConfigFile) {
         isApplyingSnapshot = true
+        providerConfigs = ProviderCatalog.normalizedCustomConfigurations(snapshot.providerConfigs)
         provider = supportedProviders.contains(snapshot.provider) ? snapshot.provider : Defaults.provider
         let normalizedLanguage = Self.normalizeLanguageCode(snapshot.language)
         language = supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language
-        useCustomModel = snapshot.useCustomModel
+        useLocalBackend = snapshot.useLocalBackend
+        developerOptionsUnlocked = snapshot.developerOptionsUnlocked
         appearanceMode = AppearanceMode(rawValue: snapshot.appearanceMode) ?? Defaults.appearanceMode
         windowGlassOpacity = Self.clampWindowGlassOpacity(snapshot.windowGlassOpacity)
         dockIconVisible = snapshot.dockIconVisible
         forceTopRightOnLaunch = snapshot.forceTopRightOnLaunch
+        recapVersion = snapshot.recapVersion
         apiKeys = snapshot.apiKeys.filter { supportedProviders.contains($0.key) }
         isApplyingSnapshot = false
     }
@@ -203,15 +260,21 @@ final class SettingsStore: ObservableObject {
 
     private func saveToDisk() {
         let normalizedLanguage = Self.normalizeLanguageCode(language)
+        let normalizedProviderConfigs = ProviderCatalog.normalizedCustomConfigurations(providerConfigs)
+        let effectiveProviderConfigs = ProviderCatalog.merged(with: normalizedProviderConfigs)
+        let normalizedSupportedProviders = Set(effectiveProviderConfigs.keys)
         let config = ConfigFile(
-            provider: supportedProviders.contains(provider) ? provider : Defaults.provider,
+            provider: normalizedSupportedProviders.contains(provider) ? provider : Defaults.provider,
             language: supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language,
-            useCustomModel: useCustomModel,
+            useLocalBackend: useLocalBackend,
+            developerOptionsUnlocked: developerOptionsUnlocked,
             appearanceMode: appearanceMode.rawValue,
             windowGlassOpacity: Self.clampWindowGlassOpacity(windowGlassOpacity),
             dockIconVisible: dockIconVisible,
             forceTopRightOnLaunch: forceTopRightOnLaunch,
-            apiKeys: apiKeys
+            recapVersion: recapVersion,
+            apiKeys: apiKeys.filter { normalizedSupportedProviders.contains($0.key) },
+            providerConfigs: effectiveProviderConfigs
         )
 
         do {
@@ -220,7 +283,9 @@ final class SettingsStore: ObservableObject {
                 withIntermediateDirectories: true
             )
 
-            let data = try JSONEncoder().encode(config)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            let data = try Self.prettyPrintedJSONData(from: encoder.encode(config))
             try data.write(to: configURL, options: .atomic)
         } catch {
             return
@@ -244,6 +309,29 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    func markRecapInstalled(version: String) {
+        guard recapVersion != version else { return }
+        recapVersion = version
+    }
+
+    var providerOptions: [ProviderOptionDescriptor] {
+        let effectiveProviderConfigs = ProviderCatalog.merged(with: providerConfigs)
+        return ProviderCatalog.orderedProviderIDs(from: effectiveProviderConfigs).map { providerID in
+            ProviderOptionDescriptor(
+                id: providerID,
+                title: effectiveProviderConfigs[providerID]?.displayName ?? providerID
+            )
+        }
+    }
+
+    func providerConfiguration(for provider: String) -> ProviderConfiguration? {
+        ProviderCatalog.merged(with: providerConfigs)[provider]
+    }
+
+    private var supportedProviders: Set<String> {
+        Set(ProviderCatalog.merged(with: providerConfigs).keys)
+    }
+
     private static func makeConfigURL(fileManager: FileManager) -> URL {
         let home = fileManager.homeDirectoryForCurrentUser
         return home
@@ -258,5 +346,83 @@ final class SettingsStore: ObservableObject {
 
     private static func clampWindowGlassOpacity(_ value: Double) -> Double {
         min(max(value, 0.70), 1.00)
+    }
+
+    private static func prettyPrintedJSONData(from data: Data) throws -> Data {
+        let object = try JSONSerialization.jsonObject(with: data)
+        let json = try prettyPrintedJSON(object) + "\n"
+        return Data(json.utf8)
+    }
+
+    private static func prettyPrintedJSON(_ object: Any, indentLevel: Int = 0) throws -> String {
+        if let dictionary = object as? [String: Any] {
+            return try prettyPrintedDictionary(dictionary, indentLevel: indentLevel)
+        }
+
+        if let array = object as? [Any] {
+            return try prettyPrintedArray(array, indentLevel: indentLevel)
+        }
+
+        if let string = object as? String {
+            return try jsonStringLiteral(string)
+        }
+
+        if let number = object as? NSNumber {
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return number.boolValue ? "true" : "false"
+            }
+            return number.stringValue
+        }
+
+        if object is NSNull {
+            return "null"
+        }
+
+        throw EncodingError.invalidValue(
+            object,
+            EncodingError.Context(codingPath: [], debugDescription: "Unsupported JSON value")
+        )
+    }
+
+    private static func prettyPrintedDictionary(_ dictionary: [String: Any], indentLevel: Int) throws -> String {
+        guard !dictionary.isEmpty else { return "{}" }
+
+        let currentIndent = jsonIndent(level: indentLevel)
+        let childIndent = jsonIndent(level: indentLevel + 1)
+        let lines = try dictionary.keys.sorted().map { key in
+            guard let rawValue = dictionary[key] else {
+                throw EncodingError.invalidValue(
+                    dictionary,
+                    EncodingError.Context(codingPath: [], debugDescription: "Missing JSON dictionary value")
+                )
+            }
+            let value = try prettyPrintedJSON(rawValue, indentLevel: indentLevel + 1)
+            return "\(childIndent)\(try jsonStringLiteral(key)): \(value)"
+        }
+
+        return "{\n\(lines.joined(separator: ",\n"))\n\(currentIndent)}"
+    }
+
+    private static func prettyPrintedArray(_ array: [Any], indentLevel: Int) throws -> String {
+        guard !array.isEmpty else { return "[]" }
+
+        let currentIndent = jsonIndent(level: indentLevel)
+        let childIndent = jsonIndent(level: indentLevel + 1)
+        let lines = try array.map { item in
+            "\(childIndent)\(try prettyPrintedJSON(item, indentLevel: indentLevel + 1))"
+        }
+
+        return "[\n\(lines.joined(separator: ",\n"))\n\(currentIndent)]"
+    }
+
+    private static func jsonStringLiteral(_ value: String) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        let data = try encoder.encode(value)
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func jsonIndent(level: Int) -> String {
+        String(repeating: " ", count: level * 4)
     }
 }

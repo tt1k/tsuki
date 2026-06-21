@@ -10,7 +10,7 @@ struct WordTokenView: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Text(shouldShowFurigana ? token.furigana : "")
+            Text(annotationText)
                 .font(DesignTokens.FontToken.furigana)
                 .foregroundStyle(DesignTokens.ColorToken.furigana)
                 .lineLimit(1)
@@ -71,11 +71,15 @@ struct WordTokenView: View {
     }
 
     private var isCopyable: Bool {
-        let furigana = token.furigana.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !furigana.isEmpty else { return false }
         let surface = token.kanji.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !surface.isEmpty else { return false }
-        return containsKanjiCharacter(in: surface)
+        guard !isPunctuationOrSymbolOrWhitespaceOnly(surface) else { return false }
+
+        if containsKanjiCharacter(in: surface) {
+            return !token.furigana.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        return isKatakanaWord(surface)
     }
 
     private func copyTokenIfNeeded() {
@@ -93,12 +97,34 @@ struct WordTokenView: View {
         let surface = token.kanji.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !surface.isEmpty else { return false }
         guard !isPunctuationOrSymbolOrWhitespaceOnly(surface) else { return false }
-        guard !token.furigana.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        return containsKanjiCharacter(in: surface)
+
+        if containsKanjiCharacter(in: surface) {
+            return !token.furigana.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        return isKatakanaWord(surface)
     }
 
     private var shouldShowFurigana: Bool {
-        shouldShowUnderline
+        let surface = token.kanji.trimmingCharacters(in: .whitespacesAndNewlines)
+        return containsKanjiCharacter(in: surface)
+            && !token.furigana.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var annotationText: String {
+        let surface = token.kanji.trimmingCharacters(in: .whitespacesAndNewlines)
+        if containsKanjiCharacter(in: surface),
+           !token.furigana.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return token.furigana
+        }
+
+        if isKatakanaWord(surface),
+           let annotation = token.annotation?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !annotation.isEmpty {
+            return annotation
+        }
+
+        return ""
     }
 
     private func containsKanjiCharacter(in text: String) -> Bool {
@@ -119,5 +145,18 @@ struct WordTokenView: View {
                 || CharacterSet.symbols.contains(scalar)
                 || japanesePunctuation.contains(scalar)
         }
+    }
+
+    private func isKatakanaWord(_ text: String) -> Bool {
+        text.unicodeScalars.contains { isKatakanaScalar($0) }
+            && text.unicodeScalars.allSatisfy { scalar in
+                isKatakanaScalar(scalar) || scalar.value == 0x30FC || scalar.value == 0x30FB
+            }
+    }
+
+    private func isKatakanaScalar(_ scalar: UnicodeScalar) -> Bool {
+        (0x30A0 ... 0x30FF).contains(scalar.value)
+            || (0x31F0 ... 0x31FF).contains(scalar.value)
+            || (0xFF66 ... 0xFF9D).contains(scalar.value)
     }
 }

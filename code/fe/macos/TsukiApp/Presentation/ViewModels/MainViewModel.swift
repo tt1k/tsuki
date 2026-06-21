@@ -12,6 +12,16 @@ final class MainViewModel: ObservableObject {
         case failure(title: String, message: String)
     }
 
+    enum HistoryDirection {
+        case previous
+        case next
+    }
+
+    private struct HistoryEntry {
+        let inputText: String
+        let result: TranslationResult
+    }
+
     @Published var inputText: String {
         didSet {
             guard inputText != oldValue else {
@@ -32,6 +42,7 @@ final class MainViewModel: ObservableObject {
     @Published private(set) var isTranslating = false
     @Published private(set) var inputLimitNoticeTitle: String?
     @Published private(set) var inputLimitNotice: String?
+    @Published private(set) var isWindowPinned = false
     @Published var showSettings = false
 
     private var displayedResult: TranslationResult?
@@ -42,10 +53,18 @@ final class MainViewModel: ObservableObject {
     private var languageObserver: AnyCancellable?
     private var latestRequestID: UInt64 = 0
     private var requestIDSeed: UInt64 = 0
+    private var history: [HistoryEntry] = []
+    private var historyIndex: Int?
+    private let wordAnnotationProvider: WordAnnotationProvider?
 
-    init(translationUseCase: TranslationUseCase, settingsStore: SettingsStore) {
+    init(
+        translationUseCase: TranslationUseCase,
+        settingsStore: SettingsStore,
+        wordAnnotationProvider: WordAnnotationProvider? = JMdictKatakanaAnnotationProvider()
+    ) {
         self.translationUseCase = translationUseCase
         self.settingsStore = settingsStore
+        self.wordAnnotationProvider = wordAnnotationProvider
         self.inputText = Self.defaultInputText(for: settingsStore.language)
 
         languageObserver = settingsStore.$language
@@ -128,20 +147,24 @@ final class MainViewModel: ObservableObject {
                         sourceText: text,
                         provider: settingsStore.provider,
                         apiKey: settingsStore.apiKey(for: settingsStore.provider),
+                        providerConfiguration: settingsStore.providerConfiguration(for: settingsStore.provider),
                         sourceLang: settingsStore.language,
                         targetLang: "ja",
-                        useCustomModel: settingsStore.useCustomModel
+                        useLocalBackend: settingsStore.useLocalBackend
                     )
                 )
                 guard requestID == latestRequestID else { return }
-                state = .success(result)
-                displayedResult = result
+                let annotatedResult = wordAnnotationProvider?.annotate(result: result) ?? result
+                state = .success(annotatedResult)
+                displayedResult = annotatedResult
                 displayedError = nil
-                TranslationNoteLogger.record(result: result)
+                recordHistoryEntry(inputText: text, result: annotatedResult)
+                TranslationNoteLogger.record(result: annotatedResult)
             } catch {
                 guard requestID == latestRequestID else { return }
                 AppEventLogger.log(
-                    "TRANSLATION_FAIL provider=\(settingsStore.provider) sourceLang=\(settingsStore.language) code=\(errorCodeForLog(error)) reason=\(error.localizedDescription) input=\(text)"
+                    "TRANSLATION_FAIL provider=\(settingsStore.provider) sourceLang=\(settingsStore.language) code=\(errorCodeForLog(error)) reason=\(error.localizedDescription) input=\(text)",
+                    category: .network
                 )
                 let failure = localizedFailureState(for: error)
                 applyFailure(failure)
@@ -182,6 +205,34 @@ final class MainViewModel: ObservableObject {
             inputLimitNoticeTitle = nil
             inputLimitNotice = nil
         }
+    }
+
+    func toggleWindowPinned() {
+        isWindowPinned.toggle()
+    }
+
+    @discardableResult
+    func navigateHistory(_ direction: HistoryDirection) -> Bool {
+        guard !isTranslating, !history.isEmpty else {
+            return false
+        }
+
+        let currentIndex = historyIndex ?? history.count - 1
+        let nextIndex: Int
+
+        switch direction {
+        case .previous:
+            nextIndex = currentIndex - 1
+        case .next:
+            nextIndex = currentIndex + 1
+        }
+
+        guard history.indices.contains(nextIndex) else {
+            return false
+        }
+
+        applyHistoryEntry(at: nextIndex)
+        return true
     }
 
     private func applyFailure(_ failure: State) {
@@ -246,6 +297,16 @@ final class MainViewModel: ObservableObject {
                         ja: "プロバイダー '\(provider)' はまだサポートされていません"
                     )
                 )
+            case let .invalidProviderConfiguration(provider, reason):
+                return localizedFailureState(
+                    title: localizedText(en: "Invalid Provider Config", zhCN: "模型配置无效", zhTW: "模型設定無效", ja: "プロバイダー設定エラー"),
+                    message: localizedText(
+                        en: "Provider '\(provider)' is misconfigured: \(reason).",
+                        zhCN: "模型 '\(provider)' 配置无效：\(reason)",
+                        zhTW: "模型 '\(provider)' 設定無效：\(reason)",
+                        ja: "プロバイダー '\(provider)' の設定が無効です：\(reason)"
+                    )
+                )
             }
         }
 
@@ -285,6 +346,8 @@ final class MainViewModel: ObservableObject {
             switch routerError {
             case .unsupportedProvider:
                 return "unsupported_provider"
+            case .invalidProviderConfiguration:
+                return "invalid_provider_configuration"
             }
         }
 
@@ -314,5 +377,24 @@ final class MainViewModel: ObservableObject {
         let current = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard current.isEmpty || Self.isDefaultInputText(current) else { return }
         inputText = Self.defaultInputText(for: language)
+    }
+
+    private func recordHistoryEntry(inputText: String, result: TranslationResult) {
+        let insertionIndex = (historyIndex ?? history.count - 1) + 1
+        if history.indices.contains(insertionIndex) {
+            history.removeSubrange(insertionIndex...)
+        }
+
+        history.append(HistoryEntry(inputText: inputText, result: result))
+        historyIndex = history.count - 1
+    }
+
+    private func applyHistoryEntry(at index: Int) {
+        let entry = history[index]
+        historyIndex = index
+        inputText = entry.inputText
+        displayedResult = entry.result
+        displayedError = nil
+        state = .success(entry.result)
     }
 }

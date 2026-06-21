@@ -41,15 +41,15 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
                 if let handle {
                     sqlite3_close(handle)
                 }
-                AppEventLogger.log("CACHE_DB_OPEN_FAIL \(message)")
+                AppEventLogger.log("CACHE_DB_OPEN_FAIL \(message)", category: .cache)
                 return
             }
 
             try Self.executeSchemaStatements(db: handle)
             db = handle
-            AppEventLogger.log("CACHE_DB_READY \(self.databaseURL.path)")
+            AppEventLogger.log("CACHE_DB_READY \(self.databaseURL.path)", category: .cache)
         } catch {
-            AppEventLogger.log("CACHE_DB_INIT_FAIL \(error.localizedDescription)")
+            AppEventLogger.log("CACHE_DB_INIT_FAIL \(error.localizedDescription)", category: .cache)
             if let db {
                 sqlite3_close(db)
             }
@@ -68,7 +68,11 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         let sql = """
         SELECT kanji, kana, meaning, sentence, tokens
         FROM translation_cache
-        WHERE (query_text = ? OR kanji = ?) AND source_lang = ? AND target_lang = ?
+        WHERE (query_text = ? OR kanji = ?)
+            AND source_lang = ?
+            AND target_lang = ?
+            AND provider = ?
+            AND use_local_backend = ?
         ORDER BY "update" DESC
         LIMIT 1;
         """
@@ -84,6 +88,8 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         bindText(request.normalizedSourceText, to: 2, in: statement)
         bindText(request.sourceLang, to: 3, in: statement)
         bindText(request.targetLang, to: 4, in: statement)
+        bindText(request.provider, to: 5, in: statement)
+        sqlite3_bind_int(statement, 6, request.useLocalBackend ? 1 : 0)
 
         let step = sqlite3_step(statement)
         guard step == SQLITE_ROW else {
@@ -112,7 +118,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         do {
             tokens = try decoder.decode([WordToken].self, from: tokensData)
         } catch {
-            AppEventLogger.log("CACHE_DB_DECODE_TOKENS_FAIL \(error.localizedDescription)")
+            AppEventLogger.log("CACHE_DB_DECODE_TOKENS_FAIL \(error.localizedDescription)", category: .cache)
             return nil
         }
 
@@ -133,16 +139,20 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             query_text,
             source_lang,
             target_lang,
+            provider,
+            use_local_backend,
             kanji,
             kana,
             meaning,
             sentence,
             tokens,
             "update"
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(query_text, source_lang, target_lang)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(query_text, source_lang, target_lang, provider, use_local_backend)
         DO UPDATE SET
             query_text = excluded.query_text,
+            provider = excluded.provider,
+            use_local_backend = excluded.use_local_backend,
             kanji = excluded.kanji,
             kana = excluded.kana,
             meaning = excluded.meaning,
@@ -162,7 +172,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         do {
             tokensData = try encoder.encode(result.tokens)
         } catch {
-            AppEventLogger.log("CACHE_DB_ENCODE_TOKENS_FAIL \(error.localizedDescription)")
+            AppEventLogger.log("CACHE_DB_ENCODE_TOKENS_FAIL \(error.localizedDescription)", category: .cache)
             return
         }
 
@@ -170,12 +180,14 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         bindText(request.normalizedSourceText, to: 1, in: statement)
         bindText(request.sourceLang, to: 2, in: statement)
         bindText(request.targetLang, to: 3, in: statement)
-        bindText(result.kanji, to: 4, in: statement)
-        bindText(result.kana, to: 5, in: statement)
-        bindText(result.meaning, to: 6, in: statement)
-        bindText(result.sentence, to: 7, in: statement)
-        bindText(tokensText, to: 8, in: statement)
-        sqlite3_bind_double(statement, 9, Date().timeIntervalSince1970)
+        bindText(request.provider, to: 4, in: statement)
+        sqlite3_bind_int(statement, 5, request.useLocalBackend ? 1 : 0)
+        bindText(result.kanji, to: 6, in: statement)
+        bindText(result.kana, to: 7, in: statement)
+        bindText(result.meaning, to: 8, in: statement)
+        bindText(result.sentence, to: 9, in: statement)
+        bindText(tokensText, to: 10, in: statement)
+        sqlite3_bind_double(statement, 11, Date().timeIntervalSince1970)
 
         let step = sqlite3_step(statement)
         guard step == SQLITE_DONE else {
@@ -254,7 +266,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             do {
                 tokens = try decoder.decode([WordToken].self, from: tokensData)
             } catch {
-                AppEventLogger.log("CACHE_DB_DECODE_LIST_TOKENS_FAIL \(error.localizedDescription)")
+                AppEventLogger.log("CACHE_DB_DECODE_LIST_TOKENS_FAIL \(error.localizedDescription)", category: .cache)
                 continue
             }
 
@@ -332,6 +344,8 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             query_text TEXT NOT NULL,
             source_lang TEXT NOT NULL,
             target_lang TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT '',
+            use_local_backend INTEGER NOT NULL DEFAULT 0,
             kanji TEXT NOT NULL,
             kana TEXT NOT NULL,
             meaning TEXT NOT NULL,
@@ -341,19 +355,70 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         );
         """
 
+        let dropCacheIndexSQL = """
+        DROP INDEX IF EXISTS idx_translation_cache_lookup;
+        """
+
         let createCacheIndexSQL = """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_cache_lookup
-        ON translation_cache(query_text, source_lang, target_lang);
+        ON translation_cache(query_text, source_lang, target_lang, provider, use_local_backend);
+        """
+
+        let dropKanjiLookupIndexSQL = """
+        DROP INDEX IF EXISTS idx_translation_cache_kanji_lookup;
         """
 
         let createKanjiLookupIndexSQL = """
         CREATE INDEX IF NOT EXISTS idx_translation_cache_kanji_lookup
-        ON translation_cache(kanji, source_lang, target_lang);
+        ON translation_cache(kanji, source_lang, target_lang, provider, use_local_backend);
         """
 
         try Self.execute(sql: createCacheTableSQL, db: db)
+        try Self.addColumnIfMissing(
+            tableName: "translation_cache",
+            columnName: "provider",
+            columnDefinition: "provider TEXT NOT NULL DEFAULT ''",
+            db: db
+        )
+        try Self.addColumnIfMissing(
+            tableName: "translation_cache",
+            columnName: "use_local_backend",
+            columnDefinition: "use_local_backend INTEGER NOT NULL DEFAULT 1",
+            db: db
+        )
+        try Self.execute(sql: dropCacheIndexSQL, db: db)
         try Self.execute(sql: createCacheIndexSQL, db: db)
+        try Self.execute(sql: dropKanjiLookupIndexSQL, db: db)
         try Self.execute(sql: createKanjiLookupIndexSQL, db: db)
+    }
+
+    private static func addColumnIfMissing(
+        tableName: String,
+        columnName: String,
+        columnDefinition: String,
+        db: OpaquePointer
+    ) throws {
+        guard try !Self.columnExists(tableName: tableName, columnName: columnName, db: db) else { return }
+        try Self.execute(sql: "ALTER TABLE \(tableName) ADD COLUMN \(columnDefinition);", db: db)
+    }
+
+    private static func columnExists(tableName: String, columnName: String, db: OpaquePointer) throws -> Bool {
+        let sql = "PRAGMA table_info(\(tableName));"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            let message = sqlite3_errmsg(db).map { String(cString: $0) } ?? "unknown"
+            throw NSError(domain: "SQLiteTranslationCacheStore", code: Int(SQLITE_ERROR), userInfo: [NSLocalizedDescriptionKey: message])
+        }
+        defer { sqlite3_finalize(statement) }
+
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let nameRaw = sqlite3_column_text(statement, 1) else { continue }
+            if String(cString: nameRaw) == columnName {
+                return true
+            }
+        }
+
+        return false
     }
 
     private static func execute(sql: String, db: OpaquePointer) throws {
@@ -370,7 +435,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
 
     private func logSQLiteError(prefix: String, db: OpaquePointer) {
         let message = sqlite3_errmsg(db).map { String(cString: $0) } ?? "unknown"
-        AppEventLogger.log("\(prefix) \(message)")
+        AppEventLogger.log("\(prefix) \(message)", category: .cache)
     }
 
     private static var sqliteTransient: sqlite3_destructor_type {

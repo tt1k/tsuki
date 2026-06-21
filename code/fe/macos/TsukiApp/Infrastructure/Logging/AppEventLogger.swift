@@ -1,5 +1,25 @@
 import Foundation
 
+enum AppLogCategory: String, CaseIterable {
+    static let paddedWidth = allCases.map(\.rawValue.count).max() ?? 0
+
+    case app
+    case userEvent = "user event"
+    case settings
+    case window
+    case keyboard
+    case network
+    case localBackend = "local backend"
+    case cache
+    case database
+    case note
+    case screenshot
+
+    var paddedLabel: String {
+        rawValue.padding(toLength: Self.paddedWidth, withPad: " ", startingAt: 0)
+    }
+}
+
 enum AppEventLogger {
     private static let queue = DispatchQueue(label: "tsuki.app.logger")
     private static var logURL: URL?
@@ -8,6 +28,7 @@ enum AppEventLogger {
         let arguments = ProcessInfo.processInfo.arguments
         let logsDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Logs/tsuki", isDirectory: true)
+            .appendingPathComponent("logs", isDirectory: true)
         let runID: String
 
         if
@@ -22,7 +43,7 @@ enum AppEventLogger {
         do {
             try FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
             logURL = logsDir.appendingPathComponent("tsuki-app-\(runID).log", isDirectory: false)
-            log("Logger initialized")
+            log("Logger initialized", category: .app)
         } catch {
             logURL = nil
         }
@@ -32,11 +53,11 @@ enum AppEventLogger {
         LocalDateTime.runIDString()
     }
 
-    static func log(_ message: String) {
+    static func log(_ message: String, category: AppLogCategory = .app) {
         queue.async {
             guard let logURL else { return }
 
-            let line = "[\(LocalDateTime.logTimestampString())] \(message)\n"
+            let line = "[\(LocalDateTime.logTimestampString())] [ \(category.paddedLabel) ] \(message)\n"
             guard let data = line.data(using: .utf8) else { return }
 
             if !FileManager.default.fileExists(atPath: logURL.path) {
