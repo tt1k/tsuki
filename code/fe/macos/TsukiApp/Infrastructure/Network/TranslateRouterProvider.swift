@@ -16,14 +16,22 @@ struct TranslateRouterProvider: TranslatorProvider {
     }
 
     private let localProvider: TranslatorProvider
+    private let localSQLiteProvider: TranslatorProvider
 
     init(
-        localProvider: TranslatorProvider = LocalDictionaryProvider()
+        localProvider: TranslatorProvider = LocalDictionaryProvider(),
+        localSQLiteProvider: TranslatorProvider = LocalSQLiteDictionaryProvider()
     ) {
         self.localProvider = localProvider
+        self.localSQLiteProvider = localSQLiteProvider
     }
 
     func translate(_ request: TranslationRequest) async throws -> ProviderTranslationPayload {
+        if request.useLocalDictionaryData {
+            AppEventLogger.log("TRANSLATION_ROUTE provider=\(request.provider) route=local_sqlite_dictionary", category: .database)
+            return try await localSQLiteProvider.translate(request)
+        }
+
         if request.useLocalBackend {
             do {
                 AppEventLogger.log("TRANSLATION_ROUTE provider=\(request.provider) route=local_query_ds", category: .localBackend)

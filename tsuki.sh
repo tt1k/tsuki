@@ -6,21 +6,20 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FE_MAC_DIR="$ROOT_DIR/code/fe/macos"
 FE_WEB_DIR="$ROOT_DIR/code/fe/web"
 BE_DIR="$ROOT_DIR/code/be"
-JMDICT_DB_PATH="$ROOT_DIR/code/fe/db/data/jmdict.sqlite3"
+JMDICT_DB_PATH="$ROOT_DIR/code/db/jmdict/data/jmdict.sqlite3"
+LOCAL_DICTIONARY_DB_PATH="$ROOT_DIR/code/db/ipadict/result/tsuki.sqlite3"
 
 TSUKI_DEFAULT_VERSION="0.0.3"
 TSUKI_DEFAULT_VERSION_DEV="0.0.3-dev"
 TSUKI_WEB_PORT="5199"
-TSUKI_DMG_WINDOW_LEFT="120"
-TSUKI_DMG_WINDOW_TOP="120"
+TSUKI_DMG_WINDOW_LEFT="100"
+TSUKI_DMG_WINDOW_TOP="100"
 TSUKI_DMG_DEFAULT_CANVAS_WIDTH="660"
-TSUKI_DMG_DEFAULT_CANVAS_HEIGHT="460"
-TSUKI_DMG_ICON_SIZE="84"
-TSUKI_DMG_TEXT_SIZE="10"
-TSUKI_DMG_POS_APP_X="200"
-TSUKI_DMG_POS_APP_Y="210"
-TSUKI_DMG_POS_APPLICATIONS_X="460"
-TSUKI_DMG_POS_APPLICATIONS_Y="210"
+TSUKI_DMG_DEFAULT_CANVAS_HEIGHT="400"
+TSUKI_DMG_ICON_SIZE="180"
+TSUKI_DMG_TEXT_SIZE="13"
+TSUKI_DMG_POS_APP_X="330"
+TSUKI_DMG_POS_APP_Y="245"
 
 if [[ -t 1 ]]; then
   UI_RESET=$'\033[0m'
@@ -181,6 +180,21 @@ copy_jmdict_database() {
   log_info "Bundled JMdict database: $target_db"
 }
 
+copy_local_dictionary_database() {
+  local target_app_dir="$1"
+  local resources_dir="$target_app_dir/Contents/Resources"
+  local target_db="$resources_dir/tsuki.sqlite3"
+
+  if [[ ! -f "$LOCAL_DICTIONARY_DB_PATH" ]]; then
+    log_warn "Local dictionary database not found at $LOCAL_DICTIONARY_DB_PATH"
+    return 1
+  fi
+
+  mkdir -p "$resources_dir"
+  cp "$LOCAL_DICTIONARY_DB_PATH" "$target_db"
+  log_info "Bundled local dictionary database: $target_db"
+}
+
 copy_cli_to_app_resources() {
   local target_app_dir="$1"
   local cli_source="$FE_MAC_DIR/tsuki"
@@ -226,21 +240,28 @@ install_system_cli() {
 stage_dmg_background_assets() {
   local staging_dir="$1"
   local app_name="$2"
+  local png_template="$ROOT_DIR/background.png"
   local svg_template="$ROOT_DIR/background.svg"
+  local background_template
   local background_dir="$staging_dir/.background"
   local background_tiff="$background_dir/background.tiff"
   local tmp_background_dir
   local tmp_background_tiff
   local app_icon_name="${app_name}.app"
   local osa_output
-  local svg_canvas_width
-  local svg_canvas_height
+  local canvas_width
+  local canvas_height
   local window_width
   local window_height
   local bg_pixel_width
   local bg_pixel_height
 
-  read -r svg_canvas_width svg_canvas_height < <(python3 - "$svg_template" "$TSUKI_DMG_DEFAULT_CANVAS_WIDTH" "$TSUKI_DMG_DEFAULT_CANVAS_HEIGHT" <<'PY'
+  if [[ -f "$png_template" ]]; then
+    background_template="$png_template"
+    read -r canvas_width canvas_height < <(sips -g pixelWidth -g pixelHeight "$background_template" 2>/dev/null | awk '/pixelWidth:/ {w=$2} /pixelHeight:/ {h=$2} END {print w, h}')
+  else
+    background_template="$svg_template"
+    read -r canvas_width canvas_height < <(python3 - "$background_template" "$TSUKI_DMG_DEFAULT_CANVAS_WIDTH" "$TSUKI_DMG_DEFAULT_CANVAS_HEIGHT" <<'PY'
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -284,16 +305,22 @@ if w is None or h is None or w <= 0 or h <= 0:
 print(int(round(w)), int(round(h)))
 PY
 )
+  fi
 
-  window_width="$svg_canvas_width"
-  window_height=$((svg_canvas_height + 24))
-  bg_pixel_width="$svg_canvas_width"
-  bg_pixel_height="$svg_canvas_height"
+  if [[ -z "${canvas_width:-}" || -z "${canvas_height:-}" ]]; then
+    canvas_width="$TSUKI_DMG_DEFAULT_CANVAS_WIDTH"
+    canvas_height="$TSUKI_DMG_DEFAULT_CANVAS_HEIGHT"
+  fi
 
-  log_info "DMG canvas ${svg_canvas_width}x${svg_canvas_height}, window ${window_width}x${window_height}, bg ${bg_pixel_width}x${bg_pixel_height}"
+  window_width="$canvas_width"
+  window_height=$((canvas_height + 22))
+  bg_pixel_width="$canvas_width"
+  bg_pixel_height="$canvas_height"
 
-  if [[ ! -f "$svg_template" ]]; then
-    log_warn "DMG background template not found at $svg_template; using plain packaging"
+  log_info "DMG canvas ${canvas_width}x${canvas_height}, window ${window_width}x${window_height}, bg ${bg_pixel_width}x${bg_pixel_height}"
+
+  if [[ ! -f "$background_template" ]]; then
+    log_warn "DMG background template not found at $background_template; using plain packaging"
     return
   fi
 
@@ -306,9 +333,9 @@ PY
   tmp_background_dir="$(mktemp -d "/tmp/tsuki-bg.XXXXXX")"
   tmp_background_tiff="$tmp_background_dir/background.tiff"
 
-  if ! sips -s format tiff -z "$bg_pixel_height" "$bg_pixel_width" "$svg_template" --out "$tmp_background_tiff" >/dev/null; then
+  if ! sips -s format tiff -z "$bg_pixel_height" "$bg_pixel_width" "$background_template" --out "$tmp_background_tiff" >/dev/null; then
     rm -rf "$tmp_background_dir"
-    log_warn "Failed to generate .background.tiff from $svg_template"
+    log_warn "Failed to generate .background.tiff from $background_template"
     return
   fi
 
@@ -320,7 +347,7 @@ PY
     return
   fi
 
-  if ! osa_output="$(osascript - "$staging_dir" "$app_icon_name" "$TSUKI_DMG_WINDOW_LEFT" "$TSUKI_DMG_WINDOW_TOP" "$window_width" "$window_height" "$TSUKI_DMG_ICON_SIZE" "$TSUKI_DMG_TEXT_SIZE" "$TSUKI_DMG_POS_APP_X" "$TSUKI_DMG_POS_APP_Y" "$TSUKI_DMG_POS_APPLICATIONS_X" "$TSUKI_DMG_POS_APPLICATIONS_Y" <<'APPLESCRIPT' 2>&1
+  if ! osa_output="$(osascript - "$staging_dir" "$app_icon_name" "$TSUKI_DMG_WINDOW_LEFT" "$TSUKI_DMG_WINDOW_TOP" "$window_width" "$window_height" "$TSUKI_DMG_ICON_SIZE" "$TSUKI_DMG_TEXT_SIZE" "$TSUKI_DMG_POS_APP_X" "$TSUKI_DMG_POS_APP_Y" <<'APPLESCRIPT' 2>&1
 on run argv
   set stagingPosixPath to item 1 of argv
   set appBundleName to item 2 of argv
@@ -332,8 +359,6 @@ on run argv
   set textSizeValue to (item 8 of argv) as integer
   set appPosX to (item 9 of argv) as integer
   set appPosY to (item 10 of argv) as integer
-  set applicationsPosX to (item 11 of argv) as integer
-  set applicationsPosY to (item 12 of argv) as integer
   set backgroundAlias to POSIX file (stagingPosixPath & "/.background/background.tiff") as alias
 
   tell application "Finder"
@@ -357,9 +382,6 @@ on run argv
     try
       set position of item appBundleName of dmgFolder to {appPosX, appPosY}
     end try
-    try
-      set position of item "Applications" of dmgFolder to {applicationsPosX, applicationsPosY}
-    end try
 
     close targetWindow
   end tell
@@ -373,7 +395,26 @@ APPLESCRIPT
     return
   fi
 
-  log_info "Applied DMG background and Finder layout from background.svg"
+  log_info "Applied DMG background and Finder layout from background asset"
+}
+
+stage_dmg_volume_icon() {
+  local mount_point="$1"
+  local app_name="$2"
+  local app_icon="$mount_point/${app_name}.app/Contents/Resources/${app_name}.icns"
+  local volume_icon="$mount_point/.VolumeIcon.icns"
+
+  if [[ ! -f "$app_icon" ]]; then
+    log_warn "App icon not found at $app_icon; skipped DMG volume icon"
+    return
+  fi
+
+  cp "$app_icon" "$volume_icon"
+  if command -v SetFile >/dev/null 2>&1; then
+    SetFile -a C "$mount_point"
+  else
+    log_warn "SetFile not found; copied volume icon but custom icon flag was not set"
+  fi
 }
 
 confirm_package_version() {
@@ -439,21 +480,31 @@ build_mac_dmg_variant() {
       log_error "Cannot build DB bundle without $JMDICT_DB_PATH"
       exit 1
     fi
+    if ! copy_local_dictionary_database "$temp_app_dir"; then
+      rm -rf "$tmp_pkg_dir"
+      log_error "Cannot build DB bundle without $LOCAL_DICTIONARY_DB_PATH"
+      exit 1
+    fi
   fi
 
   sign_app_bundle "$temp_app_dir"
 
   mkdir -p "$dmg_staging_dir"
   cp -R "$temp_app_dir" "$dmg_staging_dir/${app_name}.app"
-  ln -s /Applications "$dmg_staging_dir/Applications"
 
   rw_dmg_path="$tmp_pkg_dir/Tsuki-${version_suffix}.rw.dmg"
   mount_point="$tmp_pkg_dir/mount"
 
-  hdiutil create -volname "Tsuki ${short_version}" -srcfolder "$dmg_staging_dir" -fs HFS+ -size 128m -format UDRW -ov "$rw_dmg_path" >/dev/null
+  local dmg_size="128m"
+  if [[ "$include_jmdict_db" == "1" ]]; then
+    dmg_size="768m"
+  fi
+
+  hdiutil create -volname "Tsuki Installer" -srcfolder "$dmg_staging_dir" -fs HFS+ -size "$dmg_size" -format UDRW -ov "$rw_dmg_path" >/dev/null
   mkdir -p "$mount_point"
   hdiutil attach -nobrowse -readwrite -mountpoint "$mount_point" "$rw_dmg_path" >/dev/null
 
+  stage_dmg_volume_icon "$mount_point" "$app_name"
   stage_dmg_background_assets "$mount_point" "$app_name"
 
   hdiutil detach "$mount_point" >/dev/null
@@ -584,6 +635,7 @@ run_fe() {
         copy_app_icon "$app_dir"
         copy_cli_to_app_resources "$app_dir"
         copy_jmdict_database "$app_dir" || true
+        copy_local_dictionary_database "$app_dir" || true
 
         open -na "$app_dir" --args --run-id "$timestamp"
         log_success "TsukiApp launched via app bundle: $app_dir"

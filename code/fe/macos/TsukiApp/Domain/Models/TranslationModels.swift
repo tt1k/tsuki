@@ -8,6 +8,7 @@ struct TranslationRequest {
     let sourceLang: String
     let targetLang: String
     let useLocalBackend: Bool
+    let useLocalDictionaryData: Bool
 
     init(
         sourceText: String,
@@ -16,7 +17,8 @@ struct TranslationRequest {
         providerConfiguration: ProviderConfiguration? = nil,
         sourceLang: String,
         targetLang: String,
-        useLocalBackend: Bool = true
+        useLocalBackend: Bool = true,
+        useLocalDictionaryData: Bool = false
     ) {
         self.sourceText = sourceText
         self.provider = provider
@@ -25,6 +27,7 @@ struct TranslationRequest {
         self.sourceLang = sourceLang
         self.targetLang = targetLang
         self.useLocalBackend = useLocalBackend
+        self.useLocalDictionaryData = useLocalDictionaryData
     }
 
     var normalizedSourceText: String {

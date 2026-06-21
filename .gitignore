@@ -23,3 +23,7 @@ logs/
 
 # Build
 build/
+
+# Dictionary
+code/db/ipadict/
+code/db/jmdict/

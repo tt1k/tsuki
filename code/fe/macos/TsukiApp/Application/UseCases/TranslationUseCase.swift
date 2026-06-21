@@ -6,7 +6,7 @@ struct TranslationUseCase {
     let translationCacheStore: TranslationCacheStore
 
     func execute(request: TranslationRequest) async throws -> TranslationResult {
-        if let cached = await translationCacheStore.load(for: request) {
+        if !request.useLocalDictionaryData, let cached = await translationCacheStore.load(for: request) {
             AppEventLogger.log(
                 "CACHE_HIT \(request.sourceLang)->\(request.targetLang) \(request.normalizedSourceText)",
                 category: .cache
@@ -21,7 +21,9 @@ struct TranslationUseCase {
 
         let payload = try await translatorProvider.translate(request)
         let result = tokenizeAndAnnotateUseCase.execute(payload: payload)
-        await translationCacheStore.save(result, for: request)
+        if !request.useLocalDictionaryData {
+            await translationCacheStore.save(result, for: request)
+        }
         return result
     }
 }

@@ -128,6 +128,11 @@ struct SettingsSheetView: View {
                 AppEventLogger.log("Settings changed: useLocalBackend=\(settingsStore.useLocalBackend)", category: .settings)
             }
         }
+        .onChangeCompat(of: settingsStore.useLocalDictionaryData) { _ in
+            if hasInitializedLogs {
+                AppEventLogger.log("Settings changed: useLocalDictionaryData=\(settingsStore.useLocalDictionaryData)", category: .settings)
+            }
+        }
         .onChangeCompat(of: settingsStore.appearanceMode) { _ in
             (NSApp.delegate as? AppDelegate)?.applyAppearanceMode(
                 settingsStore.appearanceMode,
@@ -491,6 +496,7 @@ struct SettingsSheetView: View {
                 .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
             }
             .frame(height: settingsRowHeight)
+
         }
     }
 
@@ -542,6 +548,7 @@ struct SettingsSheetView: View {
                     .tint(DesignTokens.ColorToken.textDim)
             }
             .frame(height: settingsRowHeight)
+
         }
     }
 
@@ -724,6 +731,7 @@ struct SettingsSheetView: View {
                 .help(localizedText(en: "Open in Finder", zhCN: "在 Finder 中打开", zhTW: "在 Finder 中開啟", ja: "Finder で開く"))
             }
             .frame(height: settingsRowHeight)
+
         }
     }
 
@@ -737,6 +745,20 @@ struct SettingsSheetView: View {
                 Spacer()
 
                 Toggle("", isOn: $settingsStore.useLocalBackend)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(DesignTokens.ColorToken.textDim)
+            }
+            .frame(height: settingsRowHeight)
+
+            HStack {
+                Text(localizedText(en: "Use Local Dictionary Data", zhCN: "使用本地词典数据", zhTW: "使用本地詞典資料", ja: "ローカル辞書データを使用"))
+                    .font(settingsRowFont)
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Toggle("", isOn: $settingsStore.useLocalDictionaryData)
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .tint(DesignTokens.ColorToken.textDim)

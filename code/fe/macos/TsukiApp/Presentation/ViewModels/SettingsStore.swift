@@ -36,6 +36,7 @@ final class SettingsStore: ObservableObject {
         var provider: String
         var language: String
         var useLocalBackend: Bool
+        var useLocalDictionaryData: Bool
         var developerOptionsUnlocked: Bool
         var appearanceMode: String
         var windowGlassOpacity: Double
@@ -49,6 +50,7 @@ final class SettingsStore: ObservableObject {
             case provider
             case language
             case useLocalBackend = "use_local_backend"
+            case useLocalDictionaryData = "use_local_dictionary_data"
             case developerOptionsUnlocked = "developer_options_unlocked"
             case appearanceMode = "appearance_mode"
             case windowGlassOpacity = "window_glass_opacity"
@@ -63,6 +65,7 @@ final class SettingsStore: ObservableObject {
             provider: String,
             language: String,
             useLocalBackend: Bool,
+            useLocalDictionaryData: Bool,
             developerOptionsUnlocked: Bool,
             appearanceMode: String,
             windowGlassOpacity: Double,
@@ -75,6 +78,7 @@ final class SettingsStore: ObservableObject {
             self.provider = provider
             self.language = language
             self.useLocalBackend = useLocalBackend
+            self.useLocalDictionaryData = useLocalDictionaryData
             self.developerOptionsUnlocked = developerOptionsUnlocked
             self.appearanceMode = appearanceMode
             self.windowGlassOpacity = windowGlassOpacity
@@ -91,6 +95,8 @@ final class SettingsStore: ObservableObject {
             language = try container.decode(String.self, forKey: .language)
             useLocalBackend = try container.decodeIfPresent(Bool.self, forKey: .useLocalBackend)
                 ?? Defaults.useLocalBackend
+            useLocalDictionaryData = try container.decodeIfPresent(Bool.self, forKey: .useLocalDictionaryData)
+                ?? Defaults.useLocalDictionaryData
             developerOptionsUnlocked = try container.decodeIfPresent(Bool.self, forKey: .developerOptionsUnlocked)
                 ?? Defaults.developerOptionsUnlocked
             appearanceMode = try container.decodeIfPresent(String.self, forKey: .appearanceMode)
@@ -117,6 +123,7 @@ final class SettingsStore: ObservableObject {
             try container.encode(provider, forKey: .provider)
             try container.encode(language, forKey: .language)
             try container.encode(useLocalBackend, forKey: .useLocalBackend)
+            try container.encode(useLocalDictionaryData, forKey: .useLocalDictionaryData)
             try container.encode(developerOptionsUnlocked, forKey: .developerOptionsUnlocked)
             try container.encode(appearanceMode, forKey: .appearanceMode)
             try container.encode(windowGlassOpacity, forKey: .windowGlassOpacity)
@@ -136,6 +143,7 @@ final class SettingsStore: ObservableObject {
         static let provider = "deepseek"
         static let language = "en"
         static let useLocalBackend = true
+        static let useLocalDictionaryData = false
         static let developerOptionsUnlocked = false
         static let appearanceMode: AppearanceMode = .dark
         static let windowGlassOpacity = 0.86
@@ -157,6 +165,10 @@ final class SettingsStore: ObservableObject {
     }
 
     @Published var useLocalBackend: Bool {
+        didSet { saveIfNeeded() }
+    }
+
+    @Published var useLocalDictionaryData: Bool {
         didSet { saveIfNeeded() }
     }
 
@@ -209,6 +221,7 @@ final class SettingsStore: ObservableObject {
         self.provider = Defaults.provider
         self.language = Defaults.language
         self.useLocalBackend = Defaults.useLocalBackend
+        self.useLocalDictionaryData = Defaults.useLocalDictionaryData
         self.developerOptionsUnlocked = Defaults.developerOptionsUnlocked
         self.appearanceMode = Defaults.appearanceMode
         self.windowGlassOpacity = Defaults.windowGlassOpacity
@@ -243,6 +256,7 @@ final class SettingsStore: ObservableObject {
         let normalizedLanguage = Self.normalizeLanguageCode(snapshot.language)
         language = supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language
         useLocalBackend = snapshot.useLocalBackend
+        useLocalDictionaryData = snapshot.useLocalDictionaryData
         developerOptionsUnlocked = snapshot.developerOptionsUnlocked
         appearanceMode = AppearanceMode(rawValue: snapshot.appearanceMode) ?? Defaults.appearanceMode
         windowGlassOpacity = Self.clampWindowGlassOpacity(snapshot.windowGlassOpacity)
@@ -267,6 +281,7 @@ final class SettingsStore: ObservableObject {
             provider: normalizedSupportedProviders.contains(provider) ? provider : Defaults.provider,
             language: supportedLanguages.contains(normalizedLanguage) ? normalizedLanguage : Defaults.language,
             useLocalBackend: useLocalBackend,
+            useLocalDictionaryData: useLocalDictionaryData,
             developerOptionsUnlocked: developerOptionsUnlocked,
             appearanceMode: appearanceMode.rawValue,
             windowGlassOpacity: Self.clampWindowGlassOpacity(windowGlassOpacity),

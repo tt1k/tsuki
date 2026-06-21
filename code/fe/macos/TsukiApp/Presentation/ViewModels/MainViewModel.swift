@@ -150,7 +150,8 @@ final class MainViewModel: ObservableObject {
                         providerConfiguration: settingsStore.providerConfiguration(for: settingsStore.provider),
                         sourceLang: settingsStore.language,
                         targetLang: "ja",
-                        useLocalBackend: settingsStore.useLocalBackend
+                        useLocalBackend: settingsStore.useLocalBackend,
+                        useLocalDictionaryData: settingsStore.useLocalDictionaryData
                     )
                 )
                 guard requestID == latestRequestID else { return }
@@ -310,6 +311,41 @@ final class MainViewModel: ObservableObject {
             }
         }
 
+        if let localError = error as? LocalSQLiteDictionaryProvider.ProviderError {
+            switch localError {
+            case .unavailable:
+                return localizedFailureState(
+                    title: localizedText(en: "Local Dictionary Missing", zhCN: "缺少本地词典", zhTW: "缺少本地詞典", ja: "ローカル辞書なし"),
+                    message: localizedText(
+                        en: "Local dictionary data is not bundled with this app.",
+                        zhCN: "当前 App 没有内置本地词典数据",
+                        zhTW: "目前 App 沒有內建本地詞典資料",
+                        ja: "この App にはローカル辞書データが含まれていません"
+                    )
+                )
+            case let .notFound(word):
+                return localizedFailureState(
+                    title: localizedText(en: "No Local Match", zhCN: "本地词典未命中", zhTW: "本地詞典未命中", ja: "ローカル辞書未ヒット"),
+                    message: localizedText(
+                        en: "No local dictionary entry was found for '\(word)'.",
+                        zhCN: "本地词典里没有找到 '\(word)'",
+                        zhTW: "本地詞典裡沒有找到 '\(word)'",
+                        ja: "ローカル辞書に '\(word)' は見つかりませんでした"
+                    )
+                )
+            case .invalidTokens:
+                return localizedFailureState(
+                    title: localizedText(en: "Invalid Local Data", zhCN: "本地数据异常", zhTW: "本地資料異常", ja: "ローカルデータ異常"),
+                    message: localizedText(
+                        en: "The local dictionary entry has invalid token data.",
+                        zhCN: "本地词典词条的 token 数据无效",
+                        zhTW: "本地詞典詞條的 token 資料無效",
+                        ja: "ローカル辞書エントリの token データが無効です"
+                    )
+                )
+            }
+        }
+
         return localizedFailureState(
             title: localizedText(en: "Translation Failed", zhCN: "翻译失败", zhTW: "翻譯失敗", ja: "翻訳失敗"),
             message: localizedText(
@@ -348,6 +384,17 @@ final class MainViewModel: ObservableObject {
                 return "unsupported_provider"
             case .invalidProviderConfiguration:
                 return "invalid_provider_configuration"
+            }
+        }
+
+        if let localError = error as? LocalSQLiteDictionaryProvider.ProviderError {
+            switch localError {
+            case .unavailable:
+                return "local_sqlite_unavailable"
+            case .notFound:
+                return "local_sqlite_not_found"
+            case .invalidTokens:
+                return "local_sqlite_invalid_tokens"
             }
         }
 

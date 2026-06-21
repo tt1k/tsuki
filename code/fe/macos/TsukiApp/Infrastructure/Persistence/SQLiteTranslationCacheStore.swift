@@ -73,6 +73,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             AND target_lang = ?
             AND provider = ?
             AND use_local_backend = ?
+            AND use_local_dictionary_data = ?
         ORDER BY "update" DESC
         LIMIT 1;
         """
@@ -90,6 +91,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         bindText(request.targetLang, to: 4, in: statement)
         bindText(request.provider, to: 5, in: statement)
         sqlite3_bind_int(statement, 6, request.useLocalBackend ? 1 : 0)
+        sqlite3_bind_int(statement, 7, request.useLocalDictionaryData ? 1 : 0)
 
         let step = sqlite3_step(statement)
         guard step == SQLITE_ROW else {
@@ -141,18 +143,20 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             target_lang,
             provider,
             use_local_backend,
+            use_local_dictionary_data,
             kanji,
             kana,
             meaning,
             sentence,
             tokens,
             "update"
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(query_text, source_lang, target_lang, provider, use_local_backend)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(query_text, source_lang, target_lang, provider, use_local_backend, use_local_dictionary_data)
         DO UPDATE SET
             query_text = excluded.query_text,
             provider = excluded.provider,
             use_local_backend = excluded.use_local_backend,
+            use_local_dictionary_data = excluded.use_local_dictionary_data,
             kanji = excluded.kanji,
             kana = excluded.kana,
             meaning = excluded.meaning,
@@ -182,12 +186,13 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
         bindText(request.targetLang, to: 3, in: statement)
         bindText(request.provider, to: 4, in: statement)
         sqlite3_bind_int(statement, 5, request.useLocalBackend ? 1 : 0)
-        bindText(result.kanji, to: 6, in: statement)
-        bindText(result.kana, to: 7, in: statement)
-        bindText(result.meaning, to: 8, in: statement)
-        bindText(result.sentence, to: 9, in: statement)
-        bindText(tokensText, to: 10, in: statement)
-        sqlite3_bind_double(statement, 11, Date().timeIntervalSince1970)
+        sqlite3_bind_int(statement, 6, request.useLocalDictionaryData ? 1 : 0)
+        bindText(result.kanji, to: 7, in: statement)
+        bindText(result.kana, to: 8, in: statement)
+        bindText(result.meaning, to: 9, in: statement)
+        bindText(result.sentence, to: 10, in: statement)
+        bindText(tokensText, to: 11, in: statement)
+        sqlite3_bind_double(statement, 12, Date().timeIntervalSince1970)
 
         let step = sqlite3_step(statement)
         guard step == SQLITE_DONE else {
@@ -346,6 +351,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             target_lang TEXT NOT NULL,
             provider TEXT NOT NULL DEFAULT '',
             use_local_backend INTEGER NOT NULL DEFAULT 0,
+            use_local_dictionary_data INTEGER NOT NULL DEFAULT 0,
             kanji TEXT NOT NULL,
             kana TEXT NOT NULL,
             meaning TEXT NOT NULL,
@@ -361,7 +367,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
 
         let createCacheIndexSQL = """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_cache_lookup
-        ON translation_cache(query_text, source_lang, target_lang, provider, use_local_backend);
+        ON translation_cache(query_text, source_lang, target_lang, provider, use_local_backend, use_local_dictionary_data);
         """
 
         let dropKanjiLookupIndexSQL = """
@@ -370,7 +376,7 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
 
         let createKanjiLookupIndexSQL = """
         CREATE INDEX IF NOT EXISTS idx_translation_cache_kanji_lookup
-        ON translation_cache(kanji, source_lang, target_lang, provider, use_local_backend);
+        ON translation_cache(kanji, source_lang, target_lang, provider, use_local_backend, use_local_dictionary_data);
         """
 
         try Self.execute(sql: createCacheTableSQL, db: db)
@@ -384,6 +390,12 @@ actor SQLiteTranslationCacheStore: TranslationCacheStore {
             tableName: "translation_cache",
             columnName: "use_local_backend",
             columnDefinition: "use_local_backend INTEGER NOT NULL DEFAULT 1",
+            db: db
+        )
+        try Self.addColumnIfMissing(
+            tableName: "translation_cache",
+            columnName: "use_local_dictionary_data",
+            columnDefinition: "use_local_dictionary_data INTEGER NOT NULL DEFAULT 0",
             db: db
         )
         try Self.execute(sql: dropCacheIndexSQL, db: db)

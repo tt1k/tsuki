@@ -69,7 +69,19 @@ public class QueryServiceImpl implements QueryService {
             return block == Character.UnicodeBlock.HIRAGANA
                     || block == Character.UnicodeBlock.KATAKANA
                     || block == Character.UnicodeBlock.KATAKANA_PHONETIC_EXTENSIONS
-                    || block == Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS;
+                    || block == Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS
+                    || isCJKIdeograph(codePoint);
         });
+    }
+
+    private boolean isCJKIdeograph(int codePoint) {
+        return (codePoint >= 0x3400 && codePoint <= 0x4DBF)
+                || (codePoint >= 0x4E00 && codePoint <= 0x9FFF)
+                || (codePoint >= 0xF900 && codePoint <= 0xFAFF)
+                || (codePoint >= 0x20000 && codePoint <= 0x2A6DF)
+                || (codePoint >= 0x2A700 && codePoint <= 0x2B73F)
+                || (codePoint >= 0x2B740 && codePoint <= 0x2B81F)
+                || (codePoint >= 0x2B820 && codePoint <= 0x2CEAF)
+                || (codePoint >= 0x2CEB0 && codePoint <= 0x2EBEF);
     }
 }

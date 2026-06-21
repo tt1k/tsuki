@@ -59,7 +59,7 @@ final class JMdictKatakanaAnnotationProvider: WordAnnotationProvider {
         }
 
         let developmentURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("code/fe/db/data/jmdict.sqlite3", isDirectory: false)
+            .appendingPathComponent("code/db/jmdict/data/jmdict.sqlite3", isDirectory: false)
         if FileManager.default.fileExists(atPath: developmentURL.path) {
             return developmentURL
         }
