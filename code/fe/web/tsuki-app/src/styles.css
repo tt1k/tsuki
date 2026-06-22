@@ -1048,6 +1048,11 @@ body[data-theme="day"] .note-page-wrap {
   transition: none;
 }
 
+.note-token-item:is(a) {
+  color: inherit;
+  text-decoration: none;
+}
+
 .note-token-item-plain {
   padding-block: 3px;
   padding-inline: 0;
@@ -1073,6 +1078,42 @@ body[data-theme="day"] .note-page-wrap {
 
 .note-token-item-hoverable {
   cursor: copy;
+}
+
+.note-token-item-url {
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.note-token-item-url::after {
+  content: attr(data-url);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 48px));
+  padding: 7px 9px;
+  border: 1px solid var(--note-border-hover);
+  border-radius: 6px;
+  background: var(--note-tool-bg);
+  color: var(--note-text-main);
+  font-family: var(--note-font);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.note-token-item-url:hover::after,
+.note-token-item-url:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .note-token-item-hoverable:hover::before {
@@ -1123,6 +1164,11 @@ body[data-theme="day"] .note-page-wrap {
   font-weight: 700;
   color: var(--note-token-text);
   line-height: 1.2;
+}
+
+.note-token-item-url .note-token-text {
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .note-token-capsule {

@@ -16,10 +16,18 @@ const HIGHLIGHT_CLASS_MAP = {
 
 const FALLBACK_HIGHLIGHTS = ["yellow", "purple", "green", "blue", "gray"];
 const PUNCTUATION_REGEX = /^[、。！？,.!?・]$/;
-const SENTENCE_BREAK_REGEX = /[。.]/;
+const SENTENCE_BREAK_REGEX = /^[。.！？!?]$/;
+const ASCII_ONLY_REGEX = /^[\x00-\x7F]+$/;
 const KANA_ONLY_REGEX = /^[\u3040-\u309F\u30A0-\u30FFー]+$/;
+const SHORT_KANA_ONLY_REGEX = /^[\u3040-\u309F\u30A0-\u30FFー]{1,2}$/;
 const SYMBOL_ONLY_REGEX = /^[「」『』（）\[\]［］【】〈〉《》〔〕｛｝…‥〜～ー―\-・、。！？,.!?〆〃〇]+$/;
-const URL_REGEX = /https?:\/\/[^\s]+/gi;
+const DOMAIN_SOURCE = String.raw`(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s"'<>)]*)?`;
+const URL_SOURCE = String.raw`https?:\/\/[^\s"'<>)]{1,}|${DOMAIN_SOURCE}`;
+const LINK_OR_URL_REGEX = new RegExp(
+  String.raw`(!?)\[([^\]\r\n]+)\]\((${URL_SOURCE})\)|(${URL_SOURCE})`,
+  "gi"
+);
+const LINE_BREAK_REGEX = /(?:\r\n|\r|\n)+/g;
 const NOTE_EXPORT_BG_BASE_NIGHT = { r: 18, g: 18, b: 18 };
 const NOTE_EXPORT_BG_BASE_DAY = { r: 238, g: 243, b: 248 };
 
@@ -95,7 +103,11 @@ function isWhitespaceToken(value) {
   return !String(value).trim();
 }
 
-function getTokenHighlight(text, index) {
+function getTokenHighlight(text, index, options = {}) {
+  if (options.isUrl) {
+    return "blue";
+  }
+
   if (PUNCTUATION_REGEX.test(text)) {
     return "gray";
   }
@@ -114,7 +126,37 @@ function shouldHideFurigana(value) {
     return true;
   }
 
-  return isKanaOnlyText(normalized) || SYMBOL_ONLY_REGEX.test(normalized);
+  return (
+    ASCII_ONLY_REGEX.test(normalized) ||
+    isKanaOnlyText(normalized) ||
+    SYMBOL_ONLY_REGEX.test(normalized)
+  );
+}
+
+function shouldShowTokenCapsule(value, options = {}) {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (options.isUrl) {
+    return true;
+  }
+
+  return (
+    !ASCII_ONLY_REGEX.test(normalized) &&
+    !SHORT_KANA_ONLY_REGEX.test(normalized) &&
+    !SYMBOL_ONLY_REGEX.test(normalized)
+  );
+}
+
+function toUrlHref(value = "") {
+  const normalized = String(value || "").trim();
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+
+  return `https://${normalized}`;
 }
 
 function splitTextWithUrls(value = "") {
@@ -122,8 +164,32 @@ function splitTextWithUrls(value = "") {
   const segments = [];
   let lastIndex = 0;
 
-  URL_REGEX.lastIndex = 0;
-  for (const match of source.matchAll(URL_REGEX)) {
+  const appendTextSegments = (text) => {
+    let textLastIndex = 0;
+
+    LINE_BREAK_REGEX.lastIndex = 0;
+    for (const match of text.matchAll(LINE_BREAK_REGEX)) {
+      const matchIndex = match.index ?? -1;
+      const matchedText = match[0] || "";
+      if (matchIndex < 0 || !matchedText) {
+        continue;
+      }
+
+      if (matchIndex > textLastIndex) {
+        segments.push({ type: "text", value: text.slice(textLastIndex, matchIndex) });
+      }
+
+      segments.push({ type: "lineBreak", value: matchedText });
+      textLastIndex = matchIndex + matchedText.length;
+    }
+
+    if (textLastIndex < text.length) {
+      segments.push({ type: "text", value: text.slice(textLastIndex) });
+    }
+  };
+
+  LINK_OR_URL_REGEX.lastIndex = 0;
+  for (const match of source.matchAll(LINK_OR_URL_REGEX)) {
     const matchIndex = match.index ?? -1;
     const matchedText = match[0] || "";
     if (matchIndex < 0 || !matchedText) {
@@ -131,15 +197,30 @@ function splitTextWithUrls(value = "") {
     }
 
     if (matchIndex > lastIndex) {
-      segments.push({ type: "text", value: source.slice(lastIndex, matchIndex) });
+      appendTextSegments(source.slice(lastIndex, matchIndex));
     }
 
-    segments.push({ type: "url", value: matchedText });
+    const isMarkdownImage = Boolean(match[1]);
+    const markdownLabel = match[2] || "";
+    const markdownHref = match[3] || "";
+    const standaloneUrl = match[4] || "";
+
+    if (markdownLabel && markdownHref) {
+      segments.push({
+        type: isMarkdownImage ? "imageLinkText" : "linkText",
+        value: markdownLabel,
+        href: toUrlHref(markdownHref)
+      });
+    } else {
+      const urlValue = standaloneUrl || matchedText;
+      segments.push({ type: "url", value: urlValue, href: toUrlHref(urlValue) });
+    }
+
     lastIndex = matchIndex + matchedText.length;
   }
 
   if (lastIndex < source.length) {
-    segments.push({ type: "text", value: source.slice(lastIndex) });
+    appendTextSegments(source.slice(lastIndex));
   }
 
   return segments.length > 0 ? segments : [{ type: "text", value: source }];
@@ -154,11 +235,23 @@ function toFallbackTokens(text, language) {
   const segments = splitTextWithUrls(source);
   const tokens = [];
 
-  const appendToken = (kanji) => {
+  const appendToken = (kanji, options = {}) => {
     tokens.push({
       furigana: "",
       kanji,
-      highlight: getTokenHighlight(kanji, tokens.length)
+      highlight: getTokenHighlight(kanji, tokens.length, options),
+      isUrl: options.isUrl,
+      urlHref: options.urlHref,
+      linkHref: options.linkHref
+    });
+  };
+
+  const appendInputBreak = () => {
+    tokens.push({
+      furigana: "",
+      kanji: "",
+      highlight: "gray",
+      inputBreak: true
     });
   };
 
@@ -166,7 +259,24 @@ function toFallbackTokens(text, language) {
     const segmenter = new Intl.Segmenter(language || "ja", { granularity: "word" });
     segments.forEach((segment) => {
       if (segment.type === "url") {
-        appendToken(segment.value);
+        appendToken(segment.value, { isUrl: true, urlHref: segment.href });
+        return;
+      }
+
+      if (segment.type === "linkText" || segment.type === "imageLinkText") {
+        [...segmenter.segment(segment.value)]
+          .map((item) => item.segment)
+          .filter((item) => !isWhitespaceToken(item))
+          .forEach((word) => appendToken(word, { linkHref: segment.href }));
+
+        if (segment.type === "imageLinkText") {
+          appendToken(segment.href, { isUrl: true, urlHref: segment.href });
+        }
+        return;
+      }
+
+      if (segment.type === "lineBreak") {
+        appendInputBreak();
         return;
       }
 
@@ -183,7 +293,24 @@ function toFallbackTokens(text, language) {
 
   segments.forEach((segment) => {
     if (segment.type === "url") {
-      appendToken(segment.value);
+      appendToken(segment.value, { isUrl: true, urlHref: segment.href });
+      return;
+    }
+
+    if (segment.type === "linkText" || segment.type === "imageLinkText") {
+      segment.value
+        .split("")
+        .filter((char) => !isWhitespaceToken(char))
+        .forEach((char) => appendToken(char, { linkHref: segment.href }));
+
+      if (segment.type === "imageLinkText") {
+        appendToken(segment.href, { isUrl: true, urlHref: segment.href });
+      }
+      return;
+    }
+
+    if (segment.type === "lineBreak") {
+      appendInputBreak();
       return;
     }
 
@@ -215,16 +342,31 @@ function withSentenceBreaks(tokens = []) {
   const items = [];
   let lineNumber = 1;
 
+  const appendNumberedBreak = (key) => {
+    if (items[items.length - 1]?.type === "break") {
+      return;
+    }
+
+    lineNumber += 1;
+    items.push({ type: "break", key, lineNumber });
+  };
+
   if (tokens.length > 0) {
     items.push({ type: "break", key: "break-initial", lineNumber });
   }
 
   tokens.forEach((token, index) => {
+    if (token.inputBreak) {
+      if (index < tokens.length - 1) {
+        appendNumberedBreak(`break-input-${index}`);
+      }
+      return;
+    }
+
     items.push({ type: "token", token, key: `token-${index}` });
 
     if (SENTENCE_BREAK_REGEX.test(token.kanji || "") && index < tokens.length - 1) {
-      lineNumber += 1;
-      items.push({ type: "break", key: `break-${index}`, lineNumber });
+      appendNumberedBreak(`break-${index}`);
     }
   });
 
@@ -280,7 +422,13 @@ export default function NotePage({
           tokens.map((token, index) => ({
             furigana: token.furigana,
             kanji: token.kanji,
-            highlight: getTokenHighlight(token.kanji, index)
+            highlight: token.inputBreak
+              ? "gray"
+              : getTokenHighlight(token.kanji, index, { isUrl: token.isUrl }),
+            inputBreak: token.inputBreak,
+            isUrl: token.isUrl,
+            urlHref: token.urlHref,
+            linkHref: token.linkHref
           }))
         );
       })
@@ -623,22 +771,42 @@ export default function NotePage({
                   const token = item.token;
                   const capsuleClass = HIGHLIGHT_CLASS_MAP[token.highlight] || HIGHLIGHT_CLASS_MAP.gray;
                   const hideFurigana = shouldHideFurigana(token.kanji);
-                  const showCapsule = !hideFurigana && !PUNCTUATION_REGEX.test(token.kanji || "");
+                  const showCapsule = shouldShowTokenCapsule(token.kanji, { isUrl: token.isUrl });
                   const furigana = hideFurigana ? "" : token.furigana;
                   const hoverableClass = showCapsule ? " note-token-item-hoverable" : "";
                   const plainClass = showCapsule ? "" : " note-token-item-plain";
-                  return (
+                  const tokenHref = token.urlHref || token.linkHref;
+                  const urlClass = tokenHref ? " note-token-item-url" : "";
+                  const tokenText = token.isUrl ? "link" : token.kanji;
+                  const tokenContent = (
+                    <>
+                      <span className="note-token-furigana">{furigana || " "}</span>
+                      <span className="note-token-text">{tokenText}</span>
+                      {showCapsule ? (
+                        <span className={`note-token-capsule ${capsuleClass}`} aria-hidden="true" />
+                      ) : null}
+                    </>
+                  );
+
+                  return tokenHref ? (
+                    <a
+                      className={`note-token-item${hoverableClass}${plainClass}${urlClass}`}
+                      href={tokenHref}
+                      key={item.key}
+                      target="_blank"
+                      rel="noreferrer"
+                      data-url={tokenHref}
+                    >
+                      {tokenContent}
+                    </a>
+                  ) : (
                     <span
                       className={`note-token-item${hoverableClass}${plainClass}`}
                       key={item.key}
                       onClick={showCapsule ? () => copyTokenText(token.kanji) : undefined}
                       onDoubleClick={showCapsule ? () => openTsukiTranslateForToken(token.kanji) : undefined}
                     >
-                      <span className="note-token-furigana">{furigana || " "}</span>
-                      <span className="note-token-text">{token.kanji}</span>
-                      {showCapsule ? (
-                        <span className={`note-token-capsule ${capsuleClass}`} aria-hidden="true" />
-                      ) : null}
+                      {tokenContent}
                     </span>
                   );
                 })}
