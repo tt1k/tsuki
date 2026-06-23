@@ -39,6 +39,7 @@ final class SettingsStore: ObservableObject {
         var useLocalDictionaryData: Bool
         var developerOptionsUnlocked: Bool
         var appearanceMode: String
+        var appFont: String
         var windowGlassOpacity: Double
         var dockIconVisible: Bool
         var forceTopRightOnLaunch: Bool
@@ -53,6 +54,7 @@ final class SettingsStore: ObservableObject {
             case useLocalDictionaryData = "use_local_dictionary_data"
             case developerOptionsUnlocked = "developer_options_unlocked"
             case appearanceMode = "appearance_mode"
+            case appFont = "app_font"
             case windowGlassOpacity = "window_glass_opacity"
             case dockIconVisible = "dock_icon_visible"
             case forceTopRightOnLaunch = "force_top_right_on_launch"
@@ -68,6 +70,7 @@ final class SettingsStore: ObservableObject {
             useLocalDictionaryData: Bool,
             developerOptionsUnlocked: Bool,
             appearanceMode: String,
+            appFont: String,
             windowGlassOpacity: Double,
             dockIconVisible: Bool,
             forceTopRightOnLaunch: Bool,
@@ -81,6 +84,7 @@ final class SettingsStore: ObservableObject {
             self.useLocalDictionaryData = useLocalDictionaryData
             self.developerOptionsUnlocked = developerOptionsUnlocked
             self.appearanceMode = appearanceMode
+            self.appFont = appFont
             self.windowGlassOpacity = windowGlassOpacity
             self.dockIconVisible = dockIconVisible
             self.forceTopRightOnLaunch = forceTopRightOnLaunch
@@ -101,6 +105,8 @@ final class SettingsStore: ObservableObject {
                 ?? Defaults.developerOptionsUnlocked
             appearanceMode = try container.decodeIfPresent(String.self, forKey: .appearanceMode)
                 ?? Defaults.appearanceMode.rawValue
+            appFont = try container.decodeIfPresent(String.self, forKey: .appFont)
+                ?? Defaults.appFont.rawValue
             windowGlassOpacity = Self.clampWindowGlassOpacity(
                 try container.decodeIfPresent(Double.self, forKey: .windowGlassOpacity)
                     ?? Defaults.windowGlassOpacity
@@ -126,6 +132,7 @@ final class SettingsStore: ObservableObject {
             try container.encode(useLocalDictionaryData, forKey: .useLocalDictionaryData)
             try container.encode(developerOptionsUnlocked, forKey: .developerOptionsUnlocked)
             try container.encode(appearanceMode, forKey: .appearanceMode)
+            try container.encode(appFont, forKey: .appFont)
             try container.encode(windowGlassOpacity, forKey: .windowGlassOpacity)
             try container.encode(dockIconVisible, forKey: .dockIconVisible)
             try container.encode(forceTopRightOnLaunch, forKey: .forceTopRightOnLaunch)
@@ -146,6 +153,7 @@ final class SettingsStore: ObservableObject {
         static let useLocalDictionaryData = false
         static let developerOptionsUnlocked = false
         static let appearanceMode: AppearanceMode = .dark
+        static let appFont: AppFontOption = .system
         static let windowGlassOpacity = 0.86
         static let dockIconVisible = true
         static let forceTopRightOnLaunch = true
@@ -177,6 +185,10 @@ final class SettingsStore: ObservableObject {
     }
 
     @Published var appearanceMode: AppearanceMode {
+        didSet { saveIfNeeded() }
+    }
+
+    @Published var appFont: AppFontOption {
         didSet { saveIfNeeded() }
     }
 
@@ -224,6 +236,7 @@ final class SettingsStore: ObservableObject {
         self.useLocalDictionaryData = Defaults.useLocalDictionaryData
         self.developerOptionsUnlocked = Defaults.developerOptionsUnlocked
         self.appearanceMode = Defaults.appearanceMode
+        self.appFont = Defaults.appFont
         self.windowGlassOpacity = Defaults.windowGlassOpacity
         self.dockIconVisible = Defaults.dockIconVisible
         self.forceTopRightOnLaunch = Defaults.forceTopRightOnLaunch
@@ -259,6 +272,7 @@ final class SettingsStore: ObservableObject {
         useLocalDictionaryData = snapshot.useLocalDictionaryData
         developerOptionsUnlocked = snapshot.developerOptionsUnlocked
         appearanceMode = AppearanceMode(rawValue: snapshot.appearanceMode) ?? Defaults.appearanceMode
+        appFont = AppFontOption(rawValue: snapshot.appFont) ?? Defaults.appFont
         windowGlassOpacity = Self.clampWindowGlassOpacity(snapshot.windowGlassOpacity)
         dockIconVisible = snapshot.dockIconVisible
         forceTopRightOnLaunch = snapshot.forceTopRightOnLaunch
@@ -284,6 +298,7 @@ final class SettingsStore: ObservableObject {
             useLocalDictionaryData: useLocalDictionaryData,
             developerOptionsUnlocked: developerOptionsUnlocked,
             appearanceMode: appearanceMode.rawValue,
+            appFont: appFont.rawValue,
             windowGlassOpacity: Self.clampWindowGlassOpacity(windowGlassOpacity),
             dockIconVisible: dockIconVisible,
             forceTopRightOnLaunch: forceTopRightOnLaunch,

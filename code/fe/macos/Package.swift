@@ -13,6 +13,7 @@ let package = Package(
         .executableTarget(
             name: "TsukiApp",
             path: "TsukiApp",
+            exclude: ["Resources"],
             linkerSettings: [
                 .linkedLibrary("sqlite3")
             ]

@@ -30,7 +30,7 @@ struct InputCardView: View {
                 .textFieldStyle(.plain)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .font(DesignTokens.FontToken.mono)
+                .font(DesignTokens.FontToken.mono(settingsStore.appFont))
                 .foregroundStyle(DesignTokens.ColorToken.textMain)
                 .tint(DesignTokens.ColorToken.gray)
                 .frame(height: DesignTokens.Size.editorHeight)

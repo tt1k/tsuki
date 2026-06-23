@@ -8,6 +8,7 @@ struct TsukiApp: App {
 
     init() {
         AppEventLogger.configureFromLaunchArguments()
+        AppFontRegistry.registerBundledFonts()
 
         let settingsStore = SettingsStore()
         let viewModel = MainViewModel(

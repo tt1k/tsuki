@@ -142,6 +142,11 @@ struct SettingsSheetView: View {
                 AppEventLogger.log("Settings changed: appearanceMode=\(settingsStore.appearanceMode.rawValue)", category: .settings)
             }
         }
+        .onChangeCompat(of: settingsStore.appFont) { _ in
+            if hasInitializedLogs {
+                AppEventLogger.log("Settings changed: appFont=\(settingsStore.appFont.rawValue)", category: .settings)
+            }
+        }
         .onChangeCompat(of: settingsStore.windowGlassOpacity) { _ in
             (NSApp.delegate as? AppDelegate)?.applyAppearanceMode(
                 settingsStore.appearanceMode,
@@ -517,6 +522,25 @@ struct SettingsSheetView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 120)
+                .tint(DesignTokens.ColorToken.textMain)
+            }
+            .frame(height: settingsRowHeight)
+
+            HStack {
+                Text(localizedText(en: "App Font", zhCN: "应用字体", zhTW: "應用字體", ja: "アプリフォント"))
+                    .font(settingsRowFont)
+                    .foregroundStyle(DesignTokens.ColorToken.textDim)
+
+                Spacer()
+
+                Picker("Font", selection: $settingsStore.appFont) {
+                    ForEach(AppFontOption.allCases, id: \.rawValue) { option in
+                        Text(appFontTitle(option)).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 180)
                 .tint(DesignTokens.ColorToken.textMain)
             }
             .frame(height: settingsRowHeight)
@@ -1231,6 +1255,17 @@ struct SettingsSheetView: View {
             case .light: return "Light"
             case .auto: return "Auto"
             }
+        }
+    }
+
+    private func appFontTitle(_ option: AppFontOption) -> String {
+        switch option {
+        case .system:
+            return localizedText(en: "System Default", zhCN: "系统默认字体", zhTW: "系統預設字體", ja: "システム標準")
+        case .zenAntiqueSoft:
+            return "Zen Antique Soft"
+        case .notoSerifJP:
+            return "Noto Serif JP"
         }
     }
 

@@ -7,6 +7,7 @@ struct OutputCardView: View {
     let cardCornerRadius: CGFloat
     let uiOpacity: Double
     let onTokenDoubleTapSearch: (String) -> Void
+    let appFont: AppFontOption
 
     init(
         result: TranslationResult?,
@@ -14,6 +15,7 @@ struct OutputCardView: View {
         outputMessage: String?,
         cardCornerRadius: CGFloat = DesignTokens.Size.cardRadius,
         uiOpacity: Double = 1,
+        appFont: AppFontOption = .system,
         onTokenDoubleTapSearch: @escaping (String) -> Void = { _ in }
     ) {
         self.result = result
@@ -21,6 +23,7 @@ struct OutputCardView: View {
         self.outputMessage = outputMessage
         self.cardCornerRadius = cardCornerRadius
         self.uiOpacity = uiOpacity
+        self.appFont = appFont
         self.onTokenDoubleTapSearch = onTokenDoubleTapSearch
     }
 
@@ -31,7 +34,7 @@ struct OutputCardView: View {
 
             if let outputMessage {
                 Text(outputMessage)
-                    .font(DesignTokens.FontToken.mono)
+                    .font(DesignTokens.FontToken.mono(appFont))
                     .foregroundStyle(DesignTokens.ColorToken.textDim)
             }
 
@@ -40,6 +43,7 @@ struct OutputCardView: View {
                     WordTokenView(
                         token: token,
                         index: index,
+                        appFont: appFont,
                         onDoubleTapSearch: onTokenDoubleTapSearch
                     )
                 }
@@ -67,29 +71,29 @@ struct OutputCardView: View {
         Group {
             if let outputTitle {
                 Text(outputTitle)
-                    .font(DesignTokens.FontToken.monoBold)
+                    .font(DesignTokens.FontToken.monoBold(appFont))
                     .foregroundStyle(DesignTokens.ColorToken.textMain)
             } else if let result {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         Text(result.kanji)
-                            .font(DesignTokens.FontToken.monoBold)
+                            .font(DesignTokens.FontToken.monoBold(appFont))
                             .foregroundStyle(DesignTokens.ColorToken.textMain)
                         Text(result.kana)
-                            .font(DesignTokens.FontToken.monoBold)
+                            .font(DesignTokens.FontToken.monoBold(appFont))
                             .foregroundStyle(DesignTokens.ColorToken.textDim)
                     }
 
                     if !result.meaning.isEmpty {
                         Text(result.meaning)
-                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .font(DesignTokens.FontToken.meaning(appFont))
                             .foregroundStyle(DesignTokens.ColorToken.textDim)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             } else {
                 Text(" ")
-                    .font(DesignTokens.FontToken.monoBold)
+                    .font(DesignTokens.FontToken.monoBold(appFont))
             }
         }
     }

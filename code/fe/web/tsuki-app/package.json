@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate:katakana": "node scripts/generate-katakana-json.mjs",
+    "prebuild": "npm run generate:katakana",
     "build": "vite build",
     "preview": "vite preview"
   },

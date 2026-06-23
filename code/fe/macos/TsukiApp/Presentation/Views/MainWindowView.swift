@@ -40,6 +40,7 @@ struct MainWindowView: View {
                 outputTitle: viewModel.outputTitle,
                 outputMessage: viewModel.outputMessage,
                 uiOpacity: settingsStore.windowGlassOpacity,
+                appFont: settingsStore.appFont,
                 onTokenDoubleTapSearch: { tokenText in
                     viewModel.inputText = tokenText
                     viewModel.translate()
@@ -146,7 +147,8 @@ struct MainWindowView: View {
             result: result,
             outputTitle: nil,
             outputMessage: nil,
-            cardCornerRadius: 0
+            cardCornerRadius: 0,
+            appFont: settingsStore.appFont
         )
             .frame(width: renderWidth, height: renderHeight, alignment: .topLeading)
 

@@ -110,10 +110,26 @@ enum DesignTokens {
     }
 
     enum FontToken {
-        static let mono = Font.system(size: 14, weight: .regular, design: .monospaced)
-        static let monoBold = Font.system(size: 14, weight: .heavy, design: .monospaced)
-        static let furigana = Font.system(size: 8.5, weight: .regular, design: .monospaced)
+        static let mono = AppFontOption.system.regular(size: 14)
+        static let monoBold = AppFontOption.system.bold(size: 14)
+        static let furigana = AppFontOption.system.regular(size: 8.5)
         static let icon = Font.system(size: 14, weight: .regular)
+
+        static func mono(_ option: AppFontOption) -> Font {
+            option.regular(size: 14)
+        }
+
+        static func monoBold(_ option: AppFontOption) -> Font {
+            option.bold(size: 15)
+        }
+
+        static func furigana(_ option: AppFontOption) -> Font {
+            option.regular(size: 8.5)
+        }
+
+        static func meaning(_ option: AppFontOption) -> Font {
+            option.regular(size: 12)
+        }
     }
 
     enum Motion {

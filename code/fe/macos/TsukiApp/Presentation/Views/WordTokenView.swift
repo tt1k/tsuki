@@ -4,6 +4,7 @@ import AppKit
 struct WordTokenView: View {
     let token: WordToken
     let index: Int
+    let appFont: AppFontOption
     let onDoubleTapSearch: (String) -> Void
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
@@ -11,13 +12,13 @@ struct WordTokenView: View {
     var body: some View {
         VStack(spacing: 2) {
             Text(annotationText)
-                .font(DesignTokens.FontToken.furigana)
+                .font(DesignTokens.FontToken.furigana(appFont))
                 .foregroundStyle(DesignTokens.ColorToken.furigana)
                 .lineLimit(1)
                 .frame(height: 10)
 
             Text(token.kanji)
-                .font(DesignTokens.FontToken.mono)
+                .font(DesignTokens.FontToken.mono(appFont))
                 .foregroundStyle(DesignTokens.ColorToken.textMain)
                 .lineLimit(1)
         }

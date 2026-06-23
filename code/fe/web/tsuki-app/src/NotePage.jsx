@@ -4,6 +4,11 @@ import {
   NOTE_JA_ENTRIES,
   getNoteCopy
 } from "./note/noteJaContent";
+import {
+  annotateKatakanaTokens,
+  hasKatakanaAnnotationTargets,
+  isKatakanaWord
+} from "./note/katakanaAnnotations";
 import { tokenizeJapaneseWithReading } from "./note/japaneseTokenizer";
 
 const HIGHLIGHT_CLASS_MAP = {
@@ -148,6 +153,19 @@ function shouldShowTokenCapsule(value, options = {}) {
     !SHORT_KANA_ONLY_REGEX.test(normalized) &&
     !SYMBOL_ONLY_REGEX.test(normalized)
   );
+}
+
+function resolveTokenGuideText(token) {
+  const annotation = String(token.annotation || "").trim();
+  if (annotation && isKatakanaWord(token.kanji)) {
+    return annotation;
+  }
+
+  if (shouldHideFurigana(token.kanji)) {
+    return "";
+  }
+
+  return token.furigana;
 }
 
 function toUrlHref(value = "") {
@@ -391,6 +409,7 @@ export default function NotePage({
   const [outputCollapsed, setOutputCollapsed] = useState(false);
   const [isExportingOutput, setIsExportingOutput] = useState(false);
   const [computedJaTokens, setComputedJaTokens] = useState(null);
+  const [annotatedTokenState, setAnnotatedTokenState] = useState(null);
   const outputCaptureRef = useRef(null);
 
   useEffect(() => {
@@ -428,7 +447,8 @@ export default function NotePage({
             inputBreak: token.inputBreak,
             isUrl: token.isUrl,
             urlHref: token.urlHref,
-            linkHref: token.linkHref
+            linkHref: token.linkHref,
+            annotation: token.annotation
           }))
         );
       })
@@ -457,7 +477,39 @@ export default function NotePage({
 
     return baseOutputModel;
   }, [baseOutputModel, computedJaTokens, language]);
-  const outputItems = useMemo(() => withSentenceBreaks(outputModel.tokens), [outputModel.tokens]);
+  useEffect(() => {
+    let cancelled = false;
+    const sourceTokens = outputModel.tokens;
+
+    if (language !== "ja" || !hasKatakanaAnnotationTargets(sourceTokens)) {
+      setAnnotatedTokenState(null);
+      return undefined;
+    }
+
+    annotateKatakanaTokens(sourceTokens).then((tokens) => {
+      if (!cancelled) {
+        setAnnotatedTokenState({ sourceTokens, tokens });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language, outputModel.tokens]);
+  const displayOutputModel = useMemo(() => {
+    if (annotatedTokenState?.sourceTokens === outputModel.tokens) {
+      return {
+        ...outputModel,
+        tokens: annotatedTokenState.tokens
+      };
+    }
+
+    return outputModel;
+  }, [annotatedTokenState, outputModel]);
+  const outputItems = useMemo(
+    () => withSentenceBreaks(displayOutputModel.tokens),
+    [displayOutputModel.tokens]
+  );
   const copyTokenText = useCallback((text) => {
     const normalized = String(text || "").trim();
     if (!normalized || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
@@ -580,7 +632,7 @@ export default function NotePage({
       });
 
       const fallbackNameBase =
-        String(outputModel.headwordKanji || outputModel.headwordKana || "output").trim() || "output";
+        String(displayOutputModel.headwordKanji || displayOutputModel.headwordKana || "output").trim() || "output";
       const timestamp = new Date().toISOString().replace(/[.:]/g, "-");
       const suggestedName = `tsuki-${fallbackNameBase}-${timestamp}.png`;
 
@@ -617,7 +669,7 @@ export default function NotePage({
     } finally {
       setIsExportingOutput(false);
     }
-  }, [outputCollapsed, outputModel.headwordKana, outputModel.headwordKanji, themeMode]);
+  }, [displayOutputModel.headwordKana, displayOutputModel.headwordKanji, outputCollapsed, themeMode]);
 
   return (
     <main className="note-page-wrap">
@@ -747,14 +799,14 @@ export default function NotePage({
 
           {!outputCollapsed ? (
             <div className="note-output-content" ref={outputCaptureRef}>
-              {outputModel.headwordKanji || outputModel.headwordKana ? (
+              {displayOutputModel.headwordKanji || displayOutputModel.headwordKana ? (
                 <div className="note-headword-row">
-                  <span className="note-headword-kanji">{outputModel.headwordKanji}</span>
-                  <span className="note-headword-kana">{outputModel.headwordKana}</span>
+                  <span className="note-headword-kanji">{displayOutputModel.headwordKanji}</span>
+                  <span className="note-headword-kana">{displayOutputModel.headwordKana}</span>
                 </div>
               ) : null}
 
-              {outputModel.meaning ? <p className="note-meaning">{outputModel.meaning}</p> : null}
+              {displayOutputModel.meaning ? <p className="note-meaning">{displayOutputModel.meaning}</p> : null}
 
               <div className="note-token-flow">
                 {outputItems.map((item) => {
@@ -770,9 +822,8 @@ export default function NotePage({
 
                   const token = item.token;
                   const capsuleClass = HIGHLIGHT_CLASS_MAP[token.highlight] || HIGHLIGHT_CLASS_MAP.gray;
-                  const hideFurigana = shouldHideFurigana(token.kanji);
                   const showCapsule = shouldShowTokenCapsule(token.kanji, { isUrl: token.isUrl });
-                  const furigana = hideFurigana ? "" : token.furigana;
+                  const guideText = resolveTokenGuideText(token);
                   const hoverableClass = showCapsule ? " note-token-item-hoverable" : "";
                   const plainClass = showCapsule ? "" : " note-token-item-plain";
                   const tokenHref = token.urlHref || token.linkHref;
@@ -780,7 +831,7 @@ export default function NotePage({
                   const tokenText = token.isUrl ? "link" : token.kanji;
                   const tokenContent = (
                     <>
-                      <span className="note-token-furigana">{furigana || " "}</span>
+                      <span className="note-token-furigana">{guideText || " "}</span>
                       <span className="note-token-text">{tokenText}</span>
                       {showCapsule ? (
                         <span className={`note-token-capsule ${capsuleClass}`} aria-hidden="true" />

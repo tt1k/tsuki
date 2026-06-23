@@ -165,6 +165,20 @@ EOF
   rm -rf "$tmp_dir"
 }
 
+copy_app_resources() {
+  local target_app_dir="$1"
+  local source_resources_dir="$FE_MAC_DIR/TsukiApp/Resources"
+  local target_resources_dir="$target_app_dir/Contents/Resources"
+
+  if [[ ! -d "$source_resources_dir" ]]; then
+    return 0
+  fi
+
+  mkdir -p "$target_resources_dir"
+  cp -R "$source_resources_dir"/. "$target_resources_dir"/
+  log_info "Bundled app resources: $target_resources_dir"
+}
+
 copy_jmdict_database() {
   local target_app_dir="$1"
   local resources_dir="$target_app_dir/Contents/Resources"
@@ -472,6 +486,7 @@ build_mac_dmg_variant() {
   chmod +x "$temp_app_dir/Contents/MacOS/$app_name"
   write_info_plist "$temp_app_dir" "$app_name" "com.tsuki.app" "$short_version" "$short_version"
   copy_app_icon "$temp_app_dir"
+  copy_app_resources "$temp_app_dir"
   copy_cli_to_app_resources "$temp_app_dir"
 
   if [[ "$include_jmdict_db" == "1" ]]; then
@@ -633,6 +648,7 @@ run_fe() {
         chmod +x "$app_dir/Contents/MacOS/$app_name"
         write_info_plist "$app_dir" "$app_name" "com.tsuki.app.debug" "$TSUKI_DEFAULT_VERSION_DEV" "$TSUKI_DEFAULT_VERSION_DEV"
         copy_app_icon "$app_dir"
+        copy_app_resources "$app_dir"
         copy_cli_to_app_resources "$app_dir"
         copy_jmdict_database "$app_dir" || true
         copy_local_dictionary_database "$app_dir" || true
